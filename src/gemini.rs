@@ -196,7 +196,7 @@ impl GeminiClient {
 
             if next_steps_heading_regex.is_match(&processed_line) {
                 in_next_steps_section = true;
-                let mut current_list_indent = 0;
+                current_list_indent = 0;
             } else if let Some(caps) = numbered_list_start_regex.captures(&processed_line) {
                 let num_part = caps.get(1).unwrap().as_str();
                 let text_part = caps.get(2).unwrap().as_str();

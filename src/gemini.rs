@@ -99,7 +99,7 @@ impl GeminiClient {
         const RESET: &str = "\x1b[0m";
 
         let mut suggestion = None;
-        let suggestion_regex = Regex::new(r"Did you mean: `(.*?)`?").unwrap();
+        let suggestion_regex = Regex::new(r"Suggestion: `(.*?)`").unwrap();
         if let Some(caps) = suggestion_regex.captures(&gemini_text) {
             suggestion = Some(caps.get(1).unwrap().as_str().to_string());
             gemini_text = suggestion_regex.replace_all(&gemini_text, "").to_string();
@@ -110,7 +110,7 @@ impl GeminiClient {
         gemini_text = gemini_text.replace("Next Steps:", &format!("{}{}{}", YELLOW, "Next Steps:", RESET));
 
         if let Some(sugg) = suggestion {
-            gemini_text.push_str(&format!("\n{}{}{}\n", GREEN, format!("Did you mean: `{}`?", sugg), RESET));
+            gemini_text.push_str(&format!("\n{}{}{}{}\n", GREEN, "Suggestion:", RESET, format!(" `{}`", sugg)));
         }
 
         Ok(gemini_text)
@@ -229,9 +229,13 @@ impl GeminiClient {
 
         prompt.push_str(
             "Please provide the following for the last command only:
+
             1. A brief analysis of the command and its output.
+
             2. Any relevant information or next steps, preferably in a numbered list format.
-            3. If the command appears to be a typo or incorrect, suggest a similar command in the format: 'Did you mean: `suggested_command`?'
+
+            If the command appears to be a typo or incorrect, provide a suggestion in a new section titled 'Suggestion:' in the format: `suggested_command`
+
 
             Keep your response concise and directly focused on the last command."
         );

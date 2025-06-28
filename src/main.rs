@@ -69,7 +69,43 @@ async fn handle_wut_command() {
     }
 }
 
+async fn handle_query_command(query: String) {
+    let api_key = env::var("GEMINI_API_KEY").expect("GEMINI_API_KEY not set");
+    let client = GeminiClient::new(api_key);
+
+    let (tx, rx) = oneshot::channel();
+    let animation_handle = tokio::spawn(loading_animation(rx));
+
+    match client.query_gemini(&query).await {
+        Ok(response_text) => {
+            let _ = tx.send(()); // Stop animation
+            animation_handle.await.unwrap(); // Wait for animation to finish clearing
+
+            for char_code in response_text.chars() {
+                print!("{}", char_code);
+                io::stdout().flush().unwrap();
+                tokio::time::sleep(Duration::from_millis(3)).await;
+            }
+            println!(); // Newline after animation
+        }
+        Err(e) => {
+            let _ = tx.send(()); // Stop animation on error as well
+            animation_handle.await.unwrap();
+            eprintln!("Error querying Gemini: {}", e);
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() {
-    handle_wut_command().await;
+    let args: Vec<String> = env::args().collect();
+
+    if args.len() > 1 {
+        // If there are arguments, treat them as a direct query
+        let query = args[1..].join(" ");
+        handle_query_command(query).await;
+    } else {
+        // Otherwise, use the existing history analysis
+        handle_wut_command().await;
+    }
 }

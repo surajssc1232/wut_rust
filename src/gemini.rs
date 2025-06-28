@@ -147,6 +147,50 @@ impl GeminiClient {
         Ok((gemini_text, suggestion))
     }
 
+    pub async fn query_gemini(&self, query: &str) -> Result<String, String> {
+        let prompt = format!("You are a helpful assistant. Please answer the following query:\n\n{}", query);
+
+        let request = GeminiRequest {
+            contents: vec![Content {
+                parts: vec![Part { text: prompt }],
+            }],
+        };
+
+        let url = format!(
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={}",
+            self.api_key
+        );
+
+        let response = self
+            .client
+            .post(&url)
+            .header("Content-Type", "application/json")
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| format!("Request failed: {}", e))?;
+
+        if !response.status().is_success() {
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(format!("API error: {}", error_text));
+        }
+
+        let gemini_response: GeminiResponse = response
+            .json()
+            .await
+            .map_err(|e| format!("Failed to parse response: {}", e))?;
+
+        let gemini_text = gemini_response
+            .candidates
+            .into_iter()
+            .next()
+            .and_then(|c| c.content.parts.into_iter().next())
+            .map(|p| p.text)
+            .ok_or_else(|| "No response from Gemini".to_string())?;
+
+        Ok(self.convert_markdown_to_ansi(&gemini_text))
+    }
+
     fn wrap_text(&self, text: &str, max_width: usize, current_indent: usize) -> String {
         let mut wrapped_lines = Vec::new();
         let mut current_line = String::new();

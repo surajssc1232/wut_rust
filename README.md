@@ -55,6 +55,20 @@ To get a copy of Wut Rust up and running on your local machine, follow these ste
 
     This command compiles the project in release mode, optimizing it for performance. The executable will be located in `target/release/wut_rust`.
 
+3.  **Install the executable:**
+
+    ```bash
+    cargo install --path .
+    ```
+
+    This command installs the `huh` executable to your Cargo bin directory (usually `~/.cargo/bin`), making it available in your system's PATH.
+
+Alternatively, you can install directly from crates.io:
+
+```bash
+cargo install huh
+```
+
 ## Usage
 
 After successful installation, you can use Wut Rust to analyze your previous commands.

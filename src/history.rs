@@ -1,0 +1,66 @@
+use serde::{Deserialize, Serialize};
+use crate::{shell, prompt};
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CommandEntry {
+    pub command: String,
+    pub output: String,
+}
+
+pub struct HistoryManager;
+
+impl HistoryManager {
+    pub fn new() -> Result<Self, String> {
+        Ok(HistoryManager {})
+    }
+
+    pub fn get_last_commands(&self, _count: usize) -> Result<Vec<CommandEntry>, String> {
+        let pane_content = shell::get_pane_content();
+        let (shell_name, _) = shell::get_shell_info();
+        
+        let prompt_string = prompt::get_prompt(&shell_name).unwrap_or_default();
+        let cleaned_prompt = prompt::clean_prompt(&prompt_string);
+
+        if cleaned_prompt.is_empty() {
+            return Err("Could not determine shell prompt.".to_string());
+        }
+
+        let mut found_command = None;
+        let mut end = pane_content.len();
+
+        // Iterate backwards through the pane content to find prompts
+        while let Some(prompt_pos) = pane_content[..end].rfind(&cleaned_prompt) {
+            let block_start = prompt_pos + cleaned_prompt.len();
+            let block_end = end;
+            let block = &pane_content[block_start..block_end].trim();
+
+            if !block.is_empty() {
+                let mut lines = block.lines();
+                if let Some(command_line) = lines.next() {
+                    let command = command_line.trim().to_string();
+
+                    // If the command is "wut", we skip it and look for the previous one.
+                    // This handles the case where the user just typed "wut".
+                    if command == "wut" {
+                        end = prompt_pos; // Move to the block before "wut"
+                        continue; // Continue the loop to find the next command
+                    }
+
+                    // If it's not "wut" and not empty, this is the command we want to analyze.
+                    if !command.is_empty() {
+                        let output = lines.collect::<Vec<&str>>().join("\n").trim().to_string();
+                        found_command = Some(CommandEntry { command, output });
+                        break; // Found the command, exit the loop
+                    }
+                }
+            }
+            end = prompt_pos; // Move to the block before the current one
+        }
+
+        if let Some(cmd_entry) = found_command {
+            Ok(vec![cmd_entry])
+        } else {
+            Ok(Vec::new())
+        }
+    }
+}

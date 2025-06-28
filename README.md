@@ -100,6 +100,5 @@ Distributed under the MIT License. See `LICENSE` for more information.
 
 ## Contact
 
-Your Name - your_email@example.com
 
 Project Link: [https://github.com/surajssc1232/wut_rust](https://github.com/surajssc1232/wut_rust)

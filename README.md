@@ -36,6 +36,12 @@ Before you begin, ensure you have the following installed on your system:
 
     It's recommended to add this line to your shell's configuration file (e.g., `.bashrc`, `.zshrc`, `config.fish`) to make it persistent.
 
+> [!IMPORTANT]  
+> If you're using bash** please add run this code for functionality.
+>    ```
+>    echo 'PROMPT_COMMAND="history -a"' >> ~/.bashrc
+>    ```
+
 ## Installation
 
 To get a copy of Wut Rust up and running on your local machine, follow these steps:

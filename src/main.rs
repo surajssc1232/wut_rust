@@ -1,7 +1,9 @@
+mod constants;
 mod gemini;
 mod history;
 mod prompt;
 mod shell;
+mod shell_detection;
 
 use gemini::GeminiClient;
 use history::HistoryManager;
@@ -34,8 +36,21 @@ async fn loading_animation(mut rx: oneshot::Receiver<()>) {
 }
 
 async fn handle_wut_command() {
-    let history_manager = HistoryManager::new().unwrap();
-    let commands = history_manager.get_last_commands(2).unwrap();
+    let history_manager = match HistoryManager::new() {
+        Ok(manager) => manager,
+        Err(e) => {
+            eprintln!("Error initializing history manager: {}", e);
+            return;
+        }
+    };
+    
+    let commands = match history_manager.get_last_commands(2) {
+        Ok(commands) => commands,
+        Err(e) => {
+            eprintln!("Error getting command history: {}", e);
+            return;
+        }
+    };
 
     if commands.is_empty() {
         println!("No commands found in history.");
@@ -49,7 +64,7 @@ async fn handle_wut_command() {
     let animation_handle = tokio::spawn(loading_animation(rx));
 
     match client.analyze_commands(&commands).await {
-        Ok((analysis_text, suggestion)) => {
+        Ok((analysis_text, _suggestion)) => {
             let _ = tx.send(());
             animation_handle.await.unwrap();
 
@@ -59,8 +74,6 @@ async fn handle_wut_command() {
                 tokio::time::sleep(Duration::from_millis(3)).await;
             }
             println!();
-
-            if suggestion.is_some() {}
         }
         Err(e) => {
             let _ = tx.send(());

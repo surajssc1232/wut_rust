@@ -41,11 +41,11 @@ To get a copy of Wut Rust up and running on your local machine, follow these ste
 1.  **Clone the repository:**
 
     ```bash
-    git clone https://github.com/your-username/wut_rust.git
+    git clone https://github.com/surajssc1232/wut_rust.git
     cd wut_rust
     ```
 
-    *(Replace `https://github.com/your-username/wut_rust.git` with the actual URL of your repository.)*
+    *(Replace `https://github.com/surajssc1232/wut_rust.git` with the actual URL of your repository.)*
 
 2.  **Build the project:**
 

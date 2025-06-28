@@ -51,7 +51,7 @@ impl GeminiClient {
         }
     }
 
-    pub async fn analyze_commands(&self, commands: &[CommandEntry]) -> Result<String, String> {
+    pub async fn analyze_commands(&self, commands: &[CommandEntry]) -> Result<(String, Option<String>), String> {
         let prompt = self.format_prompt(commands);
 
         let request = GeminiRequest {
@@ -92,8 +92,6 @@ impl GeminiClient {
             .map(|p| p.text)
             .ok_or_else(|| "No response from Gemini".to_string())?;
 
-        gemini_text = self.convert_markdown_to_ansi(&gemini_text);
-
         const BLUE: &str = "\x1b[34m";
         const YELLOW: &str = "\x1b[33m";
 
@@ -101,11 +99,13 @@ impl GeminiClient {
         const RESET: &str = "\x1b[0m";
 
         let mut suggestion = None;
-        let suggestion_regex = Regex::new(r"(?i)Did you mean: (.*)").unwrap();
+        let suggestion_regex = Regex::new(r"(?i)Did you mean:\s*`?([^`\n]+)`?").unwrap();
         if let Some(caps) = suggestion_regex.captures(&gemini_text) {
             suggestion = Some(caps.get(1).unwrap().as_str().to_string());
             gemini_text = suggestion_regex.replace_all(&gemini_text, "").to_string();
         }
+
+        gemini_text = self.convert_markdown_to_ansi(&gemini_text);
 
         let analysis_regex = Regex::new(r"(?i)Analysis:").unwrap();
         gemini_text = analysis_regex
@@ -132,7 +132,7 @@ impl GeminiClient {
             )
             .to_string();
 
-        if let Some(sugg) = suggestion {
+        if let Some(ref sugg) = suggestion {
             gemini_text.push_str(&format!(
                 "
 
@@ -144,7 +144,7 @@ impl GeminiClient {
             ));
         }
 
-        Ok(gemini_text)
+        Ok((gemini_text, suggestion))
     }
 
     fn wrap_text(&self, text: &str, max_width: usize, current_indent: usize) -> String {

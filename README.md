@@ -1,9 +1,7 @@
 # Huh Rust
 
 
-
-![Demo GIF](https://media0.giphy.com/media/v1.Y2lkPTc5MGI3NjExZ29pcmlqY3RnbnFyajhlamlhY21ieDlpaW1iOXZ3cTB1em4ycm01dSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/GRk3GLfzduq1NtfGt5/giphy.gif)
-
+![Demo Gif](assets/demo.gif)
 
 ## Overview
 

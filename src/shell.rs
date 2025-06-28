@@ -1,6 +1,5 @@
 use std::{env, process::Command};
 
-// get shell name and shell path to know which shell it is
 pub fn get_shell_info() -> (String, String) {
     match env::var("SHELL") {
         Ok(shell_path) => {
@@ -24,7 +23,6 @@ pub fn get_shell_info() -> (String, String) {
     }
 }
 
-// get pane cotent in a String
 pub fn get_pane_content() -> String {
     let output = Command::new("tmux")
         .args(["capture-pane", "-p", "-S", "-"])

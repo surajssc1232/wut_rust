@@ -28,7 +28,6 @@ impl HistoryManager {
         let mut found_command = None;
         let mut end = pane_content.len();
 
-        // Iterate backwards through the pane content to find prompts
         while let Some(prompt_pos) = pane_content[..end].rfind(&cleaned_prompt) {
             let block_start = prompt_pos + cleaned_prompt.len();
             let block_end = end;
@@ -39,22 +38,19 @@ impl HistoryManager {
                 if let Some(command_line) = lines.next() {
                     let command = command_line.trim().to_string();
 
-                    // If the command is "wut", we skip it and look for the previous one.
-                    // This handles the case where the user just typed "wut".
                     if command == "wut" {
-                        end = prompt_pos; // Move to the block before "wut"
-                        continue; // Continue the loop to find the next command
+                        end = prompt_pos;
+                        continue;
                     }
 
-                    // If it's not "wut" and not empty, this is the command we want to analyze.
                     if !command.is_empty() {
                         let output = lines.collect::<Vec<&str>>().join("\n").trim().to_string();
                         found_command = Some(CommandEntry { command, output });
-                        break; // Found the command, exit the loop
+                        break;
                     }
                 }
             }
-            end = prompt_pos; // Move to the block before the current one
+            end = prompt_pos;
         }
 
         if let Some(cmd_entry) = found_command {

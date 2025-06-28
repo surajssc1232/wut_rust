@@ -91,18 +91,14 @@ impl GeminiClient {
             .map(|p| p.text)
             .ok_or_else(|| "No response from Gemini".to_string())?;
 
-        // Convert Markdown to ANSI before applying specific colors
         gemini_text = self.convert_markdown_to_ansi(&gemini_text);
 
-        // ANSI color codes
-        const BLUE: &str = "\x1b[34m"; // For Analysis
-        const YELLOW: &str = "\x1b[33m"; // For Next Steps
+        const BLUE: &str = "\x1b[34m";
+        const YELLOW: &str = "\x1b[33m";
         const RESET: &str = "\x1b[0m";
 
-        // Apply color to "Analysis:"
         gemini_text = gemini_text.replace("Analysis:", &format!("{}{}{}", BLUE, "Analysis:", RESET));
 
-        // Apply color to "Next Steps:"
         gemini_text = gemini_text.replace("Next Steps:", &format!("{}{}{}", YELLOW, "Next Steps:", RESET));
 
         Ok(gemini_text)

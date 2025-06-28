@@ -14,7 +14,7 @@ use tokio::sync::oneshot;
 async fn loading_animation(mut rx: oneshot::Receiver<()>) {
     let frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
     let mut i = 0;
-    print!("\x1b[?25l"); // Hide cursor
+    print!("\x1b[?25l");
     loop {
         select! {
             _ = tokio::time::sleep(Duration::from_millis(20)) => {
@@ -27,8 +27,8 @@ async fn loading_animation(mut rx: oneshot::Receiver<()>) {
             }
         }
     }
-    print!("\r\x1b[K"); // Clear line
-    print!("\x1b[?25h"); // Show cursor
+    print!("\r\x1b[K");
+    print!("\x1b[?25h");
     io::stdout().flush().unwrap();
 }
 
@@ -49,20 +49,20 @@ async fn handle_wut_command() {
 
     match client.analyze_commands(&commands).await {
         Ok((analysis_text, suggestion)) => {
-            let _ = tx.send(()); // Stop animation
-            animation_handle.await.unwrap(); // Wait for animation to finish clearing
+            let _ = tx.send(());
+            animation_handle.await.unwrap();
 
             for char_code in analysis_text.chars() {
                 print!("{}", char_code);
                 io::stdout().flush().unwrap();
                 tokio::time::sleep(Duration::from_millis(3)).await;
             }
-            println!(); // Newline after animation
+            println!();
 
             if suggestion.is_some() {}
         }
         Err(e) => {
-            let _ = tx.send(()); // Stop animation on error as well
+            let _ = tx.send(());
             animation_handle.await.unwrap();
             eprintln!("Error analyzing commands: {}", e);
         }
@@ -78,18 +78,18 @@ async fn handle_query_command(query: String) {
 
     match client.query_gemini(&query).await {
         Ok(response_text) => {
-            let _ = tx.send(()); // Stop animation
-            animation_handle.await.unwrap(); // Wait for animation to finish clearing
+            let _ = tx.send(());
+            animation_handle.await.unwrap();
 
             for char_code in response_text.chars() {
                 print!("{}", char_code);
                 io::stdout().flush().unwrap();
                 tokio::time::sleep(Duration::from_millis(3)).await;
             }
-            println!(); // Newline after animation
+            println!();
         }
         Err(e) => {
-            let _ = tx.send(()); // Stop animation on error as well
+            let _ = tx.send(());
             animation_handle.await.unwrap();
             eprintln!("Error querying Gemini: {}", e);
         }
@@ -101,11 +101,9 @@ async fn main() {
     let args: Vec<String> = env::args().collect();
 
     if args.len() > 1 {
-        // If there are arguments, treat them as a direct query
         let query = args[1..].join(" ");
         handle_query_command(query).await;
     } else {
-        // Otherwise, use the existing history analysis
         handle_wut_command().await;
     }
 }

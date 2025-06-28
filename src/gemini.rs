@@ -264,33 +264,7 @@ impl GeminiClient {
                 line_indent_for_wrapping = 0;
             }
 
-            // Bold (**text** or __text__)
-            let bold_regex = Regex::new(r"\*\*(.*?)\*\*|__(.*?)__").unwrap();
-            processed_line = bold_regex
-                .replace_all(&processed_line, &format!("{}{}{}", BOLD, "$1$2", RESET))
-                .to_string();
-
-            // Italics (*text* or _text_)
-            let italics_regex = Regex::new(r"\*(.*?)\*|_(.*?)").unwrap();
-            processed_line = italics_regex
-                .replace_all(&processed_line, &format!("{}{}{}", ITALIC, "$1$2", RESET))
-                .to_string();
-
-            // Monospace (`text`)
-            let monospace_regex = Regex::new(r"`(.*?)`").unwrap();
-            processed_line = monospace_regex
-                .replace_all(&processed_line, &format!("{}{}{}", CYAN, "$1", RESET))
-                .to_string();
-
-            // Headings (# Heading)
-            let heading_regex = Regex::new(r"^#\s*(.*)$").unwrap();
-            processed_line = heading_regex
-                .replace_all(&processed_line, &format!("\n{}{}{}\n", BOLD, "$1", RESET))
-                .to_string();
-
-            // Apply line wrapping after all other formatting
-            processed_line =
-                self.wrap_text(&processed_line, MAX_LINE_WIDTH, line_indent_for_wrapping);
+            let bold_regex = Regex::new(r"\*\*(.*?)\*\*|__(.*?)__").unwrap();            processed_line = bold_regex                .replace_all(&processed_line, &format!("{}{}{}", BOLD, "$1$2", RESET))                .to_string();            let italics_regex = Regex::new(r"\*(.*?)\*|_(.*?)").unwrap();            processed_line = italics_regex                .replace_all(&processed_line, &format!("{}{}{}", ITALIC, "$1$2", RESET))                .to_string();            let monospace_regex = Regex::new(r"`(.*?)`").unwrap();            processed_line = monospace_regex                .replace_all(&processed_line, &format!("{}{}{}", CYAN, "$1", RESET))                .to_string();            let heading_regex = Regex::new(r"^#\s*(.*)$").unwrap();            processed_line = heading_regex                .replace_all(&processed_line, &format!("\n{}{}{}\n", BOLD, "$1", RESET))                .to_string();            processed_line =                self.wrap_text(&processed_line, MAX_LINE_WIDTH, line_indent_for_wrapping);
 
             result_lines.push(processed_line);
         }

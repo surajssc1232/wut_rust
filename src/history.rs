@@ -46,7 +46,8 @@ impl HistoryManager {
                     }
                 }
                 end = prompt_pos;
-            } else {
+            }
+            else {
                 break;
             }
         }
@@ -54,4 +55,7 @@ impl HistoryManager {
         Ok(commands)
     }
 }
+
+
+
 

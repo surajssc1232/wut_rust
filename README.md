@@ -1,4 +1,4 @@
-# Wut Rust
+# Huh Rust
 
 ## Overview
 
@@ -77,7 +77,7 @@ To get an analysis of your last executed command, simply type `wut` in your term
 
 ```bash
 $ <your_command_here>
-$ wut
+$ huh
 ```
 
 Wut Rust will then provide an AI-powered analysis and suggestions based on the output of your last command.

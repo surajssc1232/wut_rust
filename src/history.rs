@@ -38,7 +38,7 @@ impl HistoryManager {
                 if let Some(command_line) = lines.next() {
                     let command = command_line.trim().to_string();
 
-                    if command == "wut" {
+                    if command == "wut" || command == "huh" {
                         end = prompt_pos;
                         continue;
                     }

@@ -108,34 +108,88 @@ impl GeminiClient {
         Ok(gemini_text)
     }
 
+    fn wrap_text(&self, text: &str, max_width: usize, current_indent: usize) -> String {
+        let mut wrapped_lines = Vec::new();
+        let mut current_line = String::new();
+        let effective_width = max_width - current_indent;
+
+        for word in text.split_whitespace() {
+            if current_line.is_empty() {
+                current_line.push_str(word);
+            } else if current_line.len() + 1 + word.len() <= effective_width {
+                current_line.push(' ');
+                current_line.push_str(word);
+            } else {
+                wrapped_lines.push(current_line);
+                current_line = String::from(word);
+            }
+        }
+        wrapped_lines.push(current_line);
+
+        let mut result = String::new();
+        for (i, line) in wrapped_lines.into_iter().enumerate() {
+            if i > 0 {
+                result.push_str(&format!("{:indent$}", " ", indent = current_indent));
+            }
+            result.push_str(&line);
+            result.push('\n');
+        }
+        result.pop(); // Remove last newline
+        result
+    }
+
     fn convert_markdown_to_ansi(&self, text: &str) -> String {
-        let mut result = text.to_string();
+        let mut result_lines = Vec::new();
         const RESET: &str = "\x1b[0m";
         const BOLD: &str = "\x1b[1m";
         const ITALIC: &str = "\x1b[3m";
         const CYAN: &str = "\x1b[36m";
+        const MAX_LINE_WIDTH: usize = 100; // Define maximum line width
 
-        // Bold (**text** or __text__)
-        let bold_regex = Regex::new(r"\*\*(.*?)\*\*|__(.*?)__").unwrap();
-        result = bold_regex.replace_all(&result, &format!("{}{}{}", BOLD, "$1$2", RESET)).to_string();
+        let numbered_list_start_regex = Regex::new(r"^(\d+\.\s+)(.*)$").unwrap();
+        let mut current_list_indent = 0;
 
-        // Italics (*text* or _text_)
-        let italics_regex = Regex::new(r"\*(.*?)\*|_(.*?)_").unwrap();
-        result = italics_regex.replace_all(&result, &format!("{}{}{}", ITALIC, "$1$2", RESET)).to_string();
+        for line in text.lines() {
+            let mut processed_line = line.to_string();
 
-        // Monospace (`text`)
-        let monospace_regex = Regex::new(r"`(.*?)`").unwrap();
-        result = monospace_regex.replace_all(&result, &format!("{}{}{}", CYAN, "$1", RESET)).to_string();
+            if let Some(caps) = numbered_list_start_regex.captures(&processed_line) {
+                // New list item
+                let num_part = caps.get(1).unwrap().as_str();
+                let text_part = caps.get(2).unwrap().as_str();
+                current_list_indent = num_part.len();
+                processed_line = format!("{}{}", num_part, text_part);
+            } else if current_list_indent > 0 && !processed_line.trim().is_empty() {
+                // Continuation of a list item
+                processed_line = format!("{:indent$}{}", " ", processed_line, indent = current_list_indent);
+            } else {
+                // Not a list item, reset indent
+                current_list_indent = 0;
+            }
 
-        // Headings (# Heading)
-        let heading_regex = Regex::new(r"^#\s*(.*)$").unwrap();
-        result = heading_regex.replace_all(&result, &format!("\n{}{}{}\n", BOLD, "$1", RESET)).to_string();
+            // Apply other Markdown formatting to the processed line
+            // Bold (**text** or __text__)
+            let bold_regex = Regex::new(r"\*\*(.*?)\*\*|__(.*?)__").unwrap();
+            processed_line = bold_regex.replace_all(&processed_line, &format!("{}{}{}", BOLD, "$1$2", RESET)).to_string();
 
-        // Numbered Lists (1. Item)
-        let numbered_list_regex = Regex::new(r"^(\d+\.\s+)(.*)$").unwrap();
-        result = numbered_list_regex.replace_all(&result, "  $1$2").to_string();
+            // Italics (*text* or _text_)
+            let italics_regex = Regex::new(r"\*(.*?)\*|_(.*?)").unwrap();
+            processed_line = italics_regex.replace_all(&processed_line, &format!("{}{}{}", ITALIC, "$1$2", RESET)).to_string();
 
-        result
+            // Monospace (`text`)
+            let monospace_regex = Regex::new(r"`(.*?)`").unwrap();
+            processed_line = monospace_regex.replace_all(&processed_line, &format!("{}{}{}", CYAN, "$1", RESET)).to_string();
+
+            // Headings (# Heading)
+            let heading_regex = Regex::new(r"^#\s*(.*)$").unwrap();
+            processed_line = heading_regex.replace_all(&processed_line, &format!("\n{}{}{}\n", BOLD, "$1", RESET)).to_string();
+
+            // Apply line wrapping after all other formatting
+            processed_line = self.wrap_text(&processed_line, MAX_LINE_WIDTH, current_list_indent);
+
+            result_lines.push(processed_line);
+        }
+
+        result_lines.join("\n")
     }
 
     fn format_prompt(&self, commands: &[CommandEntry]) -> String {

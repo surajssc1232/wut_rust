@@ -1,5 +1,4 @@
-# Huh Rust
-
+# Huh 
 
 ![Demo Gif](assets/demo.gif)
 

@@ -7,6 +7,7 @@ use gemini::GeminiClient;
 use history::HistoryManager;
 use std::env;
 use std::io::{self, Write};
+use std::fs;
 use std::time::Duration;
 use tokio::select;
 use tokio::sync::oneshot;
@@ -101,8 +102,29 @@ async fn main() {
     let args: Vec<String> = env::args().collect();
 
     if args.len() > 1 {
-        let query = args[1..].join(" ");
-        handle_query_command(query).await;
+        let first_arg = &args[1];
+        if first_arg.starts_with('@') {
+            let file_path = &first_arg[1..];
+            match fs::read_to_string(file_path) {
+                Ok(file_content) => {
+                    let mut query = format!("Content from {}:
+---
+{}
+---
+", file_path, file_content);
+                    if args.len() > 2 {
+                        query.push_str(&args[2..].join(" "));
+                    }
+                    handle_query_command(query).await;
+                }
+                Err(e) => {
+                    eprintln!("Error reading file {}: {}", file_path, e);
+                }
+            }
+        } else {
+            let query = args[1..].join(" ");
+            handle_query_command(query).await;
+        }
     } else {
         handle_wut_command().await;
     }

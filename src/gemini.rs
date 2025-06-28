@@ -162,6 +162,7 @@ impl GeminiClient {
             }],
         };
 
+        // Gemini model as a variable, I use 2.5-flash-lite in prod and the results are better than 2.0 flash while it's much faster.
         let url = format!(
             "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
             self.model, self.api_key

@@ -1,40 +1,25 @@
-use std::{env, process::Command};
-
-pub fn get_shell_info() -> (String, String) {
-    match env::var("SHELL") {
-        Ok(shell_path) => {
-            let shell_name = if shell_path.contains("zsh") {
-                "zsh"
-            } else if shell_path.contains("bash") {
-                "bash"
-            } else if shell_path.contains("fish") {
-                "fish"
-            } else {
-                "unknown"
-            };
-
-            (shell_name.to_string(), shell_path.to_string())
-        }
-
-        Err(_) => (
-            "error".to_string(),
-            "could not read SHELL env variable".to_string(),
-        ),
-    }
-}
+use std::process::Command;
 
 pub fn get_pane_content() -> String {
     let output = Command::new("tmux")
         .args(["capture-pane", "-p", "-S", "-"])
-        .output()
-        .expect("Error reading the prompt");
-
-    String::from_utf8_lossy(&output.stdout).trim().to_string()
+        .output();
+        
+    match output {
+        Ok(output) if output.status.success() => {
+            String::from_utf8_lossy(&output.stdout).trim().to_string()
+        }
+        _ => {
+            // If tmux is not available or command fails, return empty string
+            // This will be handled gracefully by the calling code
+            String::new()
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::shell_detection::get_shell_info;
 
     #[test]
     fn test_get_shell_info() {

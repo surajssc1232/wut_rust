@@ -1,3 +1,4 @@
+use crate::constants::{api, colors, formatting};
 use crate::history::CommandEntry;
 use regex::Regex;
 use reqwest::Client;
@@ -195,11 +196,7 @@ impl GeminiClient {
             .map(|p| p.text)
             .ok_or_else(|| "No response from Gemini".to_string())?;
 
-        const BLUE: &str = "\x1b[34m";
-        const YELLOW: &str = "\x1b[33m";
 
-        const RED: &str = "\x1b[31m";
-        const RESET: &str = "\x1b[0m";
 
         let mut suggestion = None;
 
@@ -238,7 +235,7 @@ impl GeminiClient {
                 &format!(
                     "
 {}{}{}",
-                    BLUE, "Analysis:", RESET
+                    colors::BLUE, "Analysis:", colors::RESET
                 ),
             )
             .to_string();
@@ -251,7 +248,7 @@ impl GeminiClient {
                     "
 
 {}{}{}",
-                    YELLOW, "Next Steps:", RESET
+                    colors::YELLOW, "Next Steps:", colors::RESET
                 ),
             )
             .to_string();
@@ -263,10 +260,8 @@ impl GeminiClient {
 
 {}{}{}
 {}",
-                RED,
-                "Did you mean:",
-                RESET,
-                sugg.trim()
+                colors::RED,
+                "Did you mean:", colors::RESET, sugg.trim()
             ));
         }
 
@@ -544,11 +539,6 @@ impl GeminiClient {
 
     fn convert_markdown_to_ansi(&self, text: &str) -> String {
         let mut result_lines = Vec::new();
-        const RESET: &str = "\x1b[0m";
-        const BOLD: &str = "\x1b[1m";
-        const ITALIC: &str = "\x1b[3m";
-        const CYAN: &str = "\x1b[36m";
-        const MAX_LINE_WIDTH: usize = 100;
 
         let numbered_list_start_regex = Regex::new(r"^(\d+\.\s+)(.*)$").unwrap();
         let next_steps_heading_regex = Regex::new(r"(?i)Next Steps:").unwrap();
@@ -571,21 +561,15 @@ impl GeminiClient {
                         let theme = &self.theme_set.themes["base16-ocean.dark"];
 
                         let mut highlighter = HighlightLines::new(syntax, theme);
-                        let highlighted_code = code
-                            .lines()
-                            .map(|line| {
-                                let ranges: Vec<(syntect::highlighting::Style, &str)> = highlighter
-                                    .highlight_line(line, &self.syntax_set)
-                                    .unwrap_or_default();
-                                if ranges.is_empty() {
-                                    line.to_string()
-                                } else {
-                                    as_24_bit_terminal_escaped(&ranges[..], false)
-                                }
-                            })
-                            .collect::<Vec<String>>()
-                            .join("\n");
-                        result_lines.push(highlighted_code);
+                        let highlighted_code = code.lines().map(|line| {
+                            let ranges: Vec<(syntect::highlighting::Style, &str)> = highlighter.highlight_line(line, &self.syntax_set).unwrap_or_default();
+                            if ranges.is_empty() {
+                                line.to_string()
+                            } else {
+                                as_24_bit_terminal_escaped(&ranges[..], false)
+                            }
+                        }).collect::<Vec<String>>().join("\n");
+                        result_lines.push(self.wrap_text(&highlighted_code, formatting::MAX_LINE_WIDTH, 0));
                     }
                 } else {
                     in_code_block = true;
@@ -638,27 +622,27 @@ impl GeminiClient {
 
             let bold_regex = Regex::new(r"\*\*(.*?)\*\*|__(.*?)__").unwrap();
             processed_line = bold_regex
-                .replace_all(&processed_line, &format!("{}{}{}", BOLD, "$1$2", RESET))
+                .replace_all(&processed_line, &format!("{}{}{}", colors::BOLD, "$1$2", colors::RESET))
                 .to_string();
 
             let italics_regex =
                 Regex::new(r"\*([^*\s][^*]*[^*\s])\*|_([^_\s][^_]*[^_\s])_").unwrap();
             processed_line = italics_regex
-                .replace_all(&processed_line, &format!("{}{}{}", ITALIC, "$1$2", RESET))
+                .replace_all(&processed_line, &format!("{}{}{}", colors::ITALIC, "$1$2", colors::RESET))
                 .to_string();
 
             let monospace_regex = Regex::new(r"`([^`]+)`").unwrap();
             processed_line = monospace_regex
-                .replace_all(&processed_line, &format!("{}{}{}", CYAN, "$1", RESET))
+                .replace_all(&processed_line, &format!("{}{}{}", colors::CYAN, "$1", colors::RESET))
                 .to_string();
 
             let heading_regex = Regex::new(r"^#\s*(.*)$").unwrap();
             processed_line = heading_regex
-                .replace_all(&processed_line, &format!("\n{}{}{}\n", BOLD, "$1", RESET))
+                .replace_all(&processed_line, &format!("\n{}{}{}\n", colors::BOLD, "$1", colors::RESET))
                 .to_string();
 
             processed_line =
-                self.wrap_text(&processed_line, MAX_LINE_WIDTH, line_indent_for_wrapping);
+                self.wrap_text(&processed_line, formatting::MAX_LINE_WIDTH, line_indent_for_wrapping);
 
             result_lines.push(processed_line);
         }

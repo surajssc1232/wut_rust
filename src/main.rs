@@ -1,7 +1,9 @@
+mod constants;
 mod gemini;
 mod history;
 mod prompt;
 mod shell;
+mod shell_detection;
 
 use clap::{Arg, Command};
 use gemini::GeminiClient;
@@ -35,8 +37,21 @@ async fn loading_animation(mut rx: oneshot::Receiver<()>) {
 }
 
 async fn handle_wut_command(api_key: String, model: String) {
-    let history_manager = HistoryManager::new().unwrap();
-    let commands = history_manager.get_last_commands(2).unwrap();
+    let history_manager = match HistoryManager::new() {
+        Ok(manager) => manager,
+        Err(e) => {
+            eprintln!("Error initializing history manager: {}", e);
+            return;
+        }
+    };
+    
+    let commands = match history_manager.get_last_commands(2) {
+        Ok(commands) => commands,
+        Err(e) => {
+            eprintln!("Error getting command history: {}", e);
+            return;
+        }
+    };
 
     if commands.is_empty() {
         println!("No commands found in history.");
@@ -55,7 +70,6 @@ async fn handle_wut_command(api_key: String, model: String) {
 
             print!("{}", analysis_text);
             println!();
-            io::stdout().flush().unwrap();
         }
         Err(e) => {
             let _ = tx.send(());

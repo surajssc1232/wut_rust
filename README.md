@@ -1,5 +1,10 @@
 # Huh Rust
 
+
+
+![Demo GIF](https://media0.giphy.com/media/v1.Y2lkPTc5MGI3NjExZ29pcmlqY3RnbnFyajhlamlhY21ieDlpaW1iOXZ3cTB1em4ycm01dSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/GRk3GLfzduq1NtfGt5/giphy.gif)
+
+
 ## Overview
 
 Wut Rust is a powerful command-line interface (CLI) tool built with Rust, designed to enhance your shell experience. Leveraging the Gemini API, it provides intelligent analysis and suggestions for your previously executed commands, making your terminal more efficient and intuitive.

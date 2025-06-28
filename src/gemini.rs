@@ -2,6 +2,10 @@ use crate::history::CommandEntry;
 use regex::Regex;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use syntect::highlighting::ThemeSet;
+use syntect::parsing::SyntaxSet;
+use syntect::util::as_24_bit_terminal_escaped;
+use syntect::easy::HighlightLines;
 
 #[derive(Serialize)]
 struct GeminiRequest {
@@ -41,13 +45,19 @@ struct ResponsePart {
 pub struct GeminiClient {
     client: Client,
     api_key: String,
+    syntax_set: SyntaxSet,
+    theme_set: ThemeSet,
 }
 
 impl GeminiClient {
     pub fn new(api_key: String) -> Self {
+        let syntax_set = SyntaxSet::load_defaults_newlines();
+        let theme_set = ThemeSet::load_defaults();
         Self {
             client: Client::new(),
             api_key,
+            syntax_set,
+            theme_set,
         }
     }
 
@@ -196,10 +206,16 @@ impl GeminiClient {
         let mut current_line = String::new();
         let effective_width = max_width - current_indent;
 
+        // Regex to strip ANSI escape codes
+        let ansi_regex = Regex::new(r"\x1b\[[0-9;]*[a-zA-Z]").unwrap();
+
         for word in text.split_whitespace() {
+            let word_stripped = ansi_regex.replace_all(word, "").to_string();
+            let current_line_stripped = ansi_regex.replace_all(&current_line, "").to_string();
+
             if current_line.is_empty() {
                 current_line.push_str(word);
-            } else if current_line.len() + 1 + word.len() <= effective_width {
+            } else if current_line_stripped.len() + 1 + word_stripped.len() <= effective_width {
                 current_line.push(' ');
                 current_line.push_str(word);
             } else {
@@ -221,6 +237,92 @@ impl GeminiClient {
         result
     }
 
+    fn find_syntax_for_language(&self, lang: &str) -> &syntect::parsing::SyntaxReference {
+        let lang_lower = lang.to_lowercase();
+        
+        // First try by name
+        if let Some(syntax) = self.syntax_set.find_syntax_by_name(&lang_lower) {
+            return syntax;
+        }
+        
+        // Then try by extension
+        if let Some(syntax) = self.syntax_set.find_syntax_by_extension(&lang_lower) {
+            return syntax;
+        }
+        
+        // Try common language mappings
+        let mapped_lang = match lang_lower.as_str() {
+            "js" | "javascript" | "node" => "JavaScript",
+            "ts" | "typescript" => "TypeScript",
+            "py" | "python" => "Python",
+            "rs" | "rust" => "Rust",
+            "go" | "golang" => "Go",
+            "cpp" | "c++" | "cxx" => "C++",
+            "c" => "C",
+            "java" => "Java",
+            "kt" | "kotlin" => "Kotlin",
+            "cs" | "csharp" | "c#" => "C#",
+            "rb" | "ruby" => "Ruby",
+            "php" => "PHP",
+            "swift" => "Swift",
+            "scala" => "Scala",
+            "clj" | "clojure" => "Clojure",
+            "hs" | "haskell" => "Haskell",
+            "lua" => "Lua",
+            "perl" | "pl" => "Perl",
+            "r" => "R",
+            "matlab" | "m" => "MATLAB",
+            "sh" | "bash" | "shell" => "Bourne Again Shell (bash)",
+            "zsh" => "Bourne Again Shell (bash)", // fallback to bash
+            "fish" => "fish",
+            "ps1" | "powershell" => "PowerShell",
+            "bat" | "batch" => "Batch File",
+            "html" | "htm" => "HTML",
+            "css" => "CSS",
+            "scss" | "sass" => "Sass",
+            "less" => "CSS", // fallback to CSS
+            "xml" => "XML",
+            "json" => "JSON",
+            "yaml" | "yml" => "YAML",
+            "toml" => "TOML",
+            "ini" | "cfg" | "conf" => "INI",
+            "dockerfile" | "docker" => "Dockerfile",
+            "sql" => "SQL",
+            "md" | "markdown" => "Markdown",
+            "tex" | "latex" => "LaTeX",
+            "vim" => "VimL",
+            "make" | "makefile" => "Makefile",
+            "cmake" => "CMake",
+            "gradle" => "Gradle",
+            "dart" => "Dart",
+            "elm" => "Elm",
+            "erlang" | "erl" => "Erlang",
+            "elixir" | "ex" => "Elixir",
+            "fsharp" | "fs" | "f#" => "F#",
+            "ocaml" | "ml" => "OCaml",
+            "nim" => "Nim",
+            "crystal" | "cr" => "Crystal",
+            "d" => "D",
+            "zig" => "Zig",
+            "v" | "vlang" => "V",
+            "assembly" | "asm" => "Assembly x86_64",
+            "diff" | "patch" => "Diff",
+            "log" => "Log",
+            "text" | "txt" => "Plain Text",
+            _ => "",
+        };
+        
+        // Try the mapped language name
+        if !mapped_lang.is_empty() {
+            if let Some(syntax) = self.syntax_set.find_syntax_by_name(mapped_lang) {
+                return syntax;
+            }
+        }
+        
+        // Try finding by first line patterns for specific languages
+        self.syntax_set.find_syntax_plain_text()
+    }
+
     fn convert_markdown_to_ansi(&self, text: &str) -> String {
         let mut result_lines = Vec::new();
         const RESET: &str = "\x1b[0m";
@@ -234,7 +336,50 @@ impl GeminiClient {
         let mut current_list_indent = 0;
         let mut in_next_steps_section = false;
 
+        let mut in_code_block = false;
+        let mut code_block_lang = String::new();
+        let mut code_block_content = Vec::new();
+
         for line in text.lines() {
+            if line.starts_with("```") {
+                if in_code_block {
+                    // End of code block
+                    in_code_block = false;
+                    let code = code_block_content.join("\n");
+                    code_block_content.clear();
+
+                    if !code.trim().is_empty() {
+                        let syntax = self.find_syntax_for_language(&code_block_lang);
+                        let theme = &self.theme_set.themes["base16-ocean.dark"];
+
+                        let mut highlighter = HighlightLines::new(syntax, theme);
+                        let highlighted_code = code.lines().map(|line| {
+                            let ranges: Vec<(syntect::highlighting::Style, &str)> = highlighter.highlight_line(line, &self.syntax_set).unwrap_or_default();
+                            if ranges.is_empty() {
+                                line.to_string()
+                            } else {
+                                as_24_bit_terminal_escaped(&ranges[..], false)
+                            }
+                        }).collect::<Vec<String>>().join("\n");
+                        result_lines.push(self.wrap_text(&highlighted_code, MAX_LINE_WIDTH, 0));
+                    }
+                } else {
+                    // Start of code block
+                    in_code_block = true;
+                    code_block_lang = line.trim_start_matches("```").trim().to_string();
+                    // If no language specified, try to detect from content later
+                    if code_block_lang.is_empty() {
+                        code_block_lang = "text".to_string();
+                    }
+                }
+                continue;
+            }
+
+            if in_code_block {
+                code_block_content.push(line.to_string());
+                continue;
+            }
+
             let mut processed_line = line.to_string();
             let mut line_indent_for_wrapping = 0;
 
@@ -264,7 +409,29 @@ impl GeminiClient {
                 line_indent_for_wrapping = 0;
             }
 
-            let bold_regex = Regex::new(r"\*\*(.*?)\*\*|__(.*?)__").unwrap();            processed_line = bold_regex                .replace_all(&processed_line, &format!("{}{}{}", BOLD, "$1$2", RESET))                .to_string();            let italics_regex = Regex::new(r"\*(.*?)\*|_(.*?)").unwrap();            processed_line = italics_regex                .replace_all(&processed_line, &format!("{}{}{}", ITALIC, "$1$2", RESET))                .to_string();            let monospace_regex = Regex::new(r"`(.*?)`").unwrap();            processed_line = monospace_regex                .replace_all(&processed_line, &format!("{}{}{}", CYAN, "$1", RESET))                .to_string();            let heading_regex = Regex::new(r"^#\s*(.*)$").unwrap();            processed_line = heading_regex                .replace_all(&processed_line, &format!("\n{}{}{}\n", BOLD, "$1", RESET))                .to_string();            processed_line =                self.wrap_text(&processed_line, MAX_LINE_WIDTH, line_indent_for_wrapping);
+            let bold_regex = Regex::new(r"\*\*(.*?)\*\*|__(.*?)__").unwrap();
+            processed_line = bold_regex
+                .replace_all(&processed_line, &format!("{}{}{}", BOLD, "$1$2", RESET))
+                .to_string();
+            
+            let italics_regex = Regex::new(r"\*(.*?)\*|_(.*?)_").unwrap();
+            processed_line = italics_regex
+                .replace_all(&processed_line, &format!("{}{}{}", ITALIC, "$1$2", RESET))
+                .to_string();
+            
+            // Enhanced inline code highlighting
+            let monospace_regex = Regex::new(r"`([^`]+)`").unwrap();
+            processed_line = monospace_regex
+                .replace_all(&processed_line, &format!("{}{}{}", CYAN, "$1", RESET))
+                .to_string();
+            
+            let heading_regex = Regex::new(r"^#\s*(.*)$").unwrap();
+            processed_line = heading_regex
+                .replace_all(&processed_line, &format!("\n{}{}{}\n", BOLD, "$1", RESET))
+                .to_string();
+            
+            processed_line =
+                self.wrap_text(&processed_line, MAX_LINE_WIDTH, line_indent_for_wrapping);
 
             result_lines.push(processed_line);
         }

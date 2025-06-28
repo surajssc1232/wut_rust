@@ -35,7 +35,7 @@ mod tests {
 
     #[test]
     fn test_clean_prompt() {
-        let input = r"\x1b[32m\[test\]content\x1b[0m\[end\]";
+        let input = "\x1b[32m\\[test\\]content\x1b[0m\\[end\\]";
         let expected = "testcontentend";
         let result = clean_prompt(input);
         assert_eq!(result, expected);

@@ -1,7 +1,7 @@
-use reqwest::Client;
-use serde::{Deserialize, Serialize};
 use crate::history::CommandEntry;
 use regex::Regex;
+use reqwest::Client;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize)]
 struct GeminiRequest {
@@ -53,7 +53,7 @@ impl GeminiClient {
 
     pub async fn analyze_commands(&self, commands: &[CommandEntry]) -> Result<String, String> {
         let prompt = self.format_prompt(commands);
-        
+
         let request = GeminiRequest {
             contents: vec![Content {
                 parts: vec![Part { text: prompt }],
@@ -65,7 +65,8 @@ impl GeminiClient {
             self.api_key
         );
 
-        let response = self.client
+        let response = self
+            .client
             .post(&url)
             .header("Content-Type", "application/json")
             .json(&request)
@@ -95,22 +96,56 @@ impl GeminiClient {
 
         const BLUE: &str = "\x1b[34m";
         const YELLOW: &str = "\x1b[33m";
-        const GREEN: &str = "\x1b[32m";
+
+        const RED: &str = "\x1b[31m"; // New RED constant
         const RESET: &str = "\x1b[0m";
 
         let mut suggestion = None;
-        let suggestion_regex = Regex::new(r"Suggestion: `(.*?)`").unwrap();
+        let suggestion_regex = Regex::new(r"(?i)Did you mean: (.*)").unwrap();
         if let Some(caps) = suggestion_regex.captures(&gemini_text) {
             suggestion = Some(caps.get(1).unwrap().as_str().to_string());
             gemini_text = suggestion_regex.replace_all(&gemini_text, "").to_string();
         }
 
-        gemini_text = gemini_text.replace("Analysis:", &format!("{}{}{}", BLUE, "Analysis:", RESET));
+        let analysis_regex = Regex::new(r"(?i)Analysis:").unwrap();
+        gemini_text = analysis_regex
+            .replace_all(
+                &gemini_text,
+                &format!(
+                    "
 
-        gemini_text = gemini_text.replace("Next Steps:", &format!("{}{}{}", YELLOW, "Next Steps:", RESET));
+{}{}{}",
+                    BLUE, "Analysis:", RESET
+
+                ),
+            )
+            .to_string();
+
+        let next_steps_regex = Regex::new(r"(?i)Next Steps:").unwrap();
+        gemini_text = next_steps_regex
+            .replace_all(
+                &gemini_text,
+                &format!(
+                    "
+{}{}{}",
+                    YELLOW, "Next Steps:", RESET
+                ),
+            )
+            .to_string();
 
         if let Some(sugg) = suggestion {
-            gemini_text.push_str(&format!("\n{}{}{}{}\n", GREEN, "Suggestion:", RESET, format!(" `{}`", sugg)));
+            gemini_text.push_str(&format!(
+                "
+
+
+{}{}{}
+{}",
+                RED,
+                "Did you mean:",
+
+                RESET,
+                sugg.trim()
+            ));
         }
 
         Ok(gemini_text)
@@ -155,44 +190,71 @@ impl GeminiClient {
         const MAX_LINE_WIDTH: usize = 100; // Define maximum line width
 
         let numbered_list_start_regex = Regex::new(r"^(\d+\.\s+)(.*)$").unwrap();
+        let next_steps_heading_regex = Regex::new(r"(?i)Next Steps:").unwrap();
         let mut current_list_indent = 0;
+        let mut in_next_steps_section = false;
 
         for line in text.lines() {
             let mut processed_line = line.to_string();
+            let mut line_indent_for_wrapping = 0;
 
-            if let Some(caps) = numbered_list_start_regex.captures(&processed_line) {
+            if next_steps_heading_regex.is_match(&processed_line) {
+                in_next_steps_section = true;
+                current_list_indent = 0; // Reset for new section
+            } else if let Some(caps) = numbered_list_start_regex.captures(&processed_line) {
                 // New list item
                 let num_part = caps.get(1).unwrap().as_str();
                 let text_part = caps.get(2).unwrap().as_str();
                 current_list_indent = num_part.len();
+                if in_next_steps_section {
+                    current_list_indent += 4;
+                }
                 processed_line = format!("{}{}", num_part, text_part);
+                line_indent_for_wrapping = current_list_indent;
             } else if current_list_indent > 0 && !processed_line.trim().is_empty() {
                 // Continuation of a list item
-                processed_line = format!("{:indent$}{}", " ", processed_line, indent = current_list_indent);
+                line_indent_for_wrapping = current_list_indent;
+                processed_line = format!(
+                    "{:<width$}{}",
+                    " ",
+                    processed_line,
+                    width = line_indent_for_wrapping
+                );
             } else {
-                // Not a list item, reset indent
+                // Not a list item, reset indent and section flag
                 current_list_indent = 0;
+                in_next_steps_section = false;
+                line_indent_for_wrapping = 0;
             }
 
             // Apply other Markdown formatting to the processed line
             // Bold (**text** or __text__)
             let bold_regex = Regex::new(r"\*\*(.*?)\*\*|__(.*?)__").unwrap();
-            processed_line = bold_regex.replace_all(&processed_line, &format!("{}{}{}", BOLD, "$1$2", RESET)).to_string();
+            processed_line = bold_regex
+                .replace_all(&processed_line, &format!("{}{}{}", BOLD, "$1$2", RESET))
+                .to_string();
 
             // Italics (*text* or _text_)
             let italics_regex = Regex::new(r"\*(.*?)\*|_(.*?)").unwrap();
-            processed_line = italics_regex.replace_all(&processed_line, &format!("{}{}{}", ITALIC, "$1$2", RESET)).to_string();
+            processed_line = italics_regex
+                .replace_all(&processed_line, &format!("{}{}{}", ITALIC, "$1$2", RESET))
+                .to_string();
 
             // Monospace (`text`)
             let monospace_regex = Regex::new(r"`(.*?)`").unwrap();
-            processed_line = monospace_regex.replace_all(&processed_line, &format!("{}{}{}", CYAN, "$1", RESET)).to_string();
+            processed_line = monospace_regex
+                .replace_all(&processed_line, &format!("{}{}{}", CYAN, "$1", RESET))
+                .to_string();
 
             // Headings (# Heading)
             let heading_regex = Regex::new(r"^#\s*(.*)$").unwrap();
-            processed_line = heading_regex.replace_all(&processed_line, &format!("\n{}{}{}\n", BOLD, "$1", RESET)).to_string();
+            processed_line = heading_regex
+                .replace_all(&processed_line, &format!("\n{}{}{}\n", BOLD, "$1", RESET))
+                .to_string();
 
             // Apply line wrapping after all other formatting
-            processed_line = self.wrap_text(&processed_line, MAX_LINE_WIDTH, current_list_indent);
+            processed_line =
+                self.wrap_text(&processed_line, MAX_LINE_WIDTH, line_indent_for_wrapping);
 
             result_lines.push(processed_line);
         }
@@ -212,8 +274,7 @@ impl GeminiClient {
                 for cmd in context_commands {
                     prompt.push_str(&format!(
                         "Command: {}\nOutput: {}\n\n",
-                        cmd.command,
-                        cmd.output
+                        cmd.command, cmd.output
                     ));
                 }
                 prompt.push_str("\n");
@@ -222,19 +283,18 @@ impl GeminiClient {
             prompt.push_str("--- Command to Analyze ---\n");
             prompt.push_str(&format!(
                 "Command: {}\nOutput: {}\n\n",
-                last_command.command,
-                last_command.output
+                last_command.command, last_command.output
             ));
         }
 
         prompt.push_str(
             "Please provide the following for the last command only:
 
-            1. A brief analysis of the command and its output.
+            A brief analysis of the command and its output.
 
-            2. Any relevant information or next steps, preferably in a numbered list format.
+            Any relevant information or next steps, preferably in a numbered list format.
 
-            If the command appears to be a typo or incorrect, provide a suggestion in a new section titled 'Suggestion:' in the format: `suggested_command`
+            If the command appears to be a typo or incorrect, provide a suggestion in a new section titled 'Did you mean:' in the format: `suggested_command`
 
 
             Keep your response concise and directly focused on the last command."

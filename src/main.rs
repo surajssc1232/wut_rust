@@ -1,15 +1,15 @@
+mod gemini;
+mod history;
 mod prompt;
 mod shell;
-mod history;
-mod gemini;
 
-use history::HistoryManager;
 use gemini::GeminiClient;
+use history::HistoryManager;
 use std::env;
 use std::io::{self, Write};
 use std::time::Duration;
-use tokio::sync::oneshot;
 use tokio::select;
+use tokio::sync::oneshot;
 
 async fn loading_animation(mut rx: oneshot::Receiver<()>) {
     let frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
@@ -17,7 +17,7 @@ async fn loading_animation(mut rx: oneshot::Receiver<()>) {
     print!("\x1b[?25l"); // Hide cursor
     loop {
         select! {
-            _ = tokio::time::sleep(Duration::from_millis(80)) => {
+            _ = tokio::time::sleep(Duration::from_millis(20)) => {
                 print!("\r{} Analyzing...\x1b[K", frames[i % frames.len()]);
                 io::stdout().flush().unwrap();
                 i += 1;
@@ -55,20 +55,12 @@ async fn handle_wut_command() {
             for char_code in analysis_text.chars() {
                 print!("{}", char_code);
                 io::stdout().flush().unwrap();
-                tokio::time::sleep(Duration::from_millis(10)).await;
+                tokio::time::sleep(Duration::from_millis(3)).await;
             }
             println!(); // Newline after animation
 
-            if let Some(sugg) = suggestion {
-                println!("Do you want to run this command? (Y/n)");
-                let mut input = String::new();
-                io::stdin().read_line(&mut input).expect("Failed to read line");
-                let input = input.trim().to_lowercase();
-                if input == "y" || input == "" {
-                    shell::execute_command(&sugg);
-                }
-            }
-        },
+            if suggestion.is_some() {}
+        }
         Err(e) => {
             let _ = tx.send(()); // Stop animation on error as well
             animation_handle.await.unwrap();

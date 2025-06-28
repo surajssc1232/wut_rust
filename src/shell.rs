@@ -32,33 +32,6 @@ pub fn get_pane_content() -> String {
     String::from_utf8_lossy(&output.stdout).trim().to_string()
 }
 
-use std::io::{self, Write};
-
-pub fn execute_command(command: &str) {
-    let output = Command::new("tmux")
-        .args(["send-keys", command, "C-m"])
-        .output();
-
-    match output {
-        Ok(o) => {
-            if !o.status.success() {
-                eprintln!("Failed to send command via tmux: {:?}", o.status.code());
-                eprintln!("Stdout: {}", String::from_utf8_lossy(&o.stdout));
-                eprintln!("Stderr: {}", String::from_utf8_lossy(&o.stderr));
-                println!("Command could not be automatically executed. Please press Enter to run it:");
-                println!("{}", command);
-                io::stdout().flush().unwrap();
-            }
-        }
-        Err(e) => {
-            eprintln!("Could not execute tmux command: {}", e);
-            println!("Command could not be automatically executed. Please press Enter to run it:");
-            println!("{}", command);
-            io::stdout().flush().unwrap();
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

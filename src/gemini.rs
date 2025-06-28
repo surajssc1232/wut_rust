@@ -113,10 +113,8 @@ impl GeminiClient {
                 &gemini_text,
                 &format!(
                     "
-
 {}{}{}",
                     BLUE, "Analysis:", RESET
-
                 ),
             )
             .to_string();
@@ -127,6 +125,7 @@ impl GeminiClient {
                 &gemini_text,
                 &format!(
                     "
+
 {}{}{}",
                     YELLOW, "Next Steps:", RESET
                 ),
@@ -141,10 +140,7 @@ impl GeminiClient {
 {}{}{}
 {}",
                 RED,
-                "Did you mean:",
-
-                RESET,
-                sugg.trim()
+                "Did you mean:", RESET,sugg.trim()
             ));
         }
 

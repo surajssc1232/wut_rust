@@ -235,7 +235,6 @@ impl GeminiClient {
 
             Keep your response concise and directly focused on the last command."
         );
-        );
 
         prompt
     }

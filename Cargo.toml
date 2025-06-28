@@ -1,7 +1,12 @@
 [package]
-name = "wut"
+name = "huh"
 version = "0.1.0"
 edition = "2021"
+description = "A CLI tool that provides AI-powered analysis and suggestions for your shell commands."
+license = "MIT"
+readme = "README.md"
+authors = ["Suraj Singh <surajssc1232@gmail.com>"]
+homepage = "https://github.com/surajssc1232/wut_rust"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

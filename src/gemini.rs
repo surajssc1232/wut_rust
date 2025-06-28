@@ -97,7 +97,7 @@ impl GeminiClient {
         const BLUE: &str = "\x1b[34m";
         const YELLOW: &str = "\x1b[33m";
 
-        const RED: &str = "\x1b[31m"; // New RED constant
+        const RED: &str = "\x1b[31m";
         const RESET: &str = "\x1b[0m";
 
         let mut suggestion = None;
@@ -173,7 +173,7 @@ impl GeminiClient {
             result.push_str(&line);
             result.push('\n');
         }
-        result.pop(); // Remove last newline
+        result.pop();
         result
     }
 
@@ -183,7 +183,7 @@ impl GeminiClient {
         const BOLD: &str = "\x1b[1m";
         const ITALIC: &str = "\x1b[3m";
         const CYAN: &str = "\x1b[36m";
-        const MAX_LINE_WIDTH: usize = 100; // Define maximum line width
+        const MAX_LINE_WIDTH: usize = 100;
 
         let numbered_list_start_regex = Regex::new(r"^(\d+\.\s+)(.*)$").unwrap();
         let next_steps_heading_regex = Regex::new(r"(?i)Next Steps:").unwrap();
@@ -196,9 +196,8 @@ impl GeminiClient {
 
             if next_steps_heading_regex.is_match(&processed_line) {
                 in_next_steps_section = true;
-                current_list_indent = 0; // Reset for new section
+                let mut current_list_indent = 0;
             } else if let Some(caps) = numbered_list_start_regex.captures(&processed_line) {
-                // New list item
                 let num_part = caps.get(1).unwrap().as_str();
                 let text_part = caps.get(2).unwrap().as_str();
                 current_list_indent = num_part.len();
@@ -208,7 +207,6 @@ impl GeminiClient {
                 processed_line = format!("{}{}", num_part, text_part);
                 line_indent_for_wrapping = current_list_indent;
             } else if current_list_indent > 0 && !processed_line.trim().is_empty() {
-                // Continuation of a list item
                 line_indent_for_wrapping = current_list_indent;
                 processed_line = format!(
                     "{:<width$}{}",
@@ -217,13 +215,11 @@ impl GeminiClient {
                     width = line_indent_for_wrapping
                 );
             } else {
-                // Not a list item, reset indent and section flag
                 current_list_indent = 0;
                 in_next_steps_section = false;
                 line_indent_for_wrapping = 0;
             }
 
-            // Apply other Markdown formatting to the processed line
             // Bold (**text** or __text__)
             let bold_regex = Regex::new(r"\*\*(.*?)\*\*|__(.*?)__").unwrap();
             processed_line = bold_regex

@@ -54,3 +54,4 @@ impl HistoryManager {
         Ok(commands)
     }
 }
+

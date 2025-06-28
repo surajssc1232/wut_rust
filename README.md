@@ -2,13 +2,13 @@
 
 ## Overview
 
-Wut Rust is a powerful and interactive command-line interface (CLI) tool built with Rust, designed to streamline your workflow by providing an intelligent shell experience. Leveraging the Gemini API, it offers advanced features such as AI-powered command suggestions, intelligent history management, and dynamic prompt customization, making your terminal more efficient and intuitive.
+Wut Rust is a powerful command-line interface (CLI) tool built with Rust, designed to enhance your shell experience. Leveraging the Gemini API, it provides intelligent analysis and suggestions for your previously executed commands, making your terminal more efficient and intuitive.
 
 ## Features
 
--   **AI-Powered Suggestions:** Integrates with the Gemini API to provide context-aware command suggestions and completions.
--   **Intelligent History:** Smartly manages your command history, allowing for easier retrieval and reuse of past commands.
--   **Customizable Prompt:** Offers flexible options to personalize your shell prompt for better readability and information display.
+-   **AI-Powered Command Analysis:** Integrates with the Gemini API to provide intelligent analysis and insights into your most recently executed command.
+-   **Contextual Suggestions:** Offers relevant information and next steps based on the command's output.
+-   **History Integration:** Reads your shell history to provide context for the AI analysis.
 -   **Fast and Reliable:** Built with Rust, ensuring high performance, memory safety, and reliability.
 -   **Cross-Platform:** Designed to work seamlessly across various operating systems.
 
@@ -57,38 +57,16 @@ To get a copy of Wut Rust up and running on your local machine, follow these ste
 
 ## Usage
 
-After successful installation, you can run Wut Rust from your terminal. 
+After successful installation, you can use Wut Rust to analyze your previous commands.
 
-To start the interactive shell:
-
-```bash
-./target/release/wut_rust
-```
-
-*(If you want to run it directly from the source directory without building first, you can use `cargo run`)*
+To get an analysis of your last executed command, simply type `wut` in your terminal:
 
 ```bash
-cargo run
+$ <your_command_here>
+$ wut
 ```
 
-Once inside the Wut Rust shell, you can type commands as you normally would. The AI suggestions and history features will be active.
-
-### Examples (Illustrative - actual commands may vary)
-
--   **Basic Command Execution:**
-    ```
-    $ ls -l
-    ```
-
--   **AI-Powered Suggestion (e.g., after typing `git co`):**
-    ```
-    $ git commit -m "Initial commit" (suggestion: git checkout main)
-    ```
-
--   **History Search (e.g., pressing `Ctrl+R` and typing `docker`):**
-    ```
-    (reverse-i-search)`docker`: docker ps -a
-    ```
+Wut Rust will then provide an AI-powered analysis and suggestions based on the output of your last command.
 
 ## Contributing
 
@@ -110,4 +88,4 @@ Distributed under the MIT License. See `LICENSE` for more information.
 
 Your Name - your_email@example.com
 
-Project Link: [https://github.com/your-username/wut_rust](https://github.com/your-username/wut_rust)
+Project Link: [https://github.com/surajssc1232/wut_rust](https://github.com/surajssc1232/wut_rust)

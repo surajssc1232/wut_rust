@@ -71,111 +71,79 @@ impl GeminiClient {
         const YELLOW: &str = "\x1b[33m";
         const RESET: &str = "\x1b[0m";
         const BOLD: &str = "\x1b[1m";
-        const MAX_DIFF_LINES: usize = 50; // Show full diff only if total changes < 50 lines
 
         let diff = TextDiff::from_lines(original, new_content);
         
         // Count total changes
         let mut total_additions = 0;
         let mut total_deletions = 0;
-        let mut total_changes = 0;
         
         for op in diff.ops() {
             for change in diff.iter_changes(op) {
                 match change.tag() {
-                    ChangeTag::Delete => {
-                        total_deletions += 1;
-                        total_changes += 1;
-                    },
-                    ChangeTag::Insert => {
-                        total_additions += 1;
-                        total_changes += 1;
-                    },
+                    ChangeTag::Delete => total_deletions += 1,
+                    ChangeTag::Insert => total_additions += 1,
                     ChangeTag::Equal => {},
                 }
             }
         }
 
         println!("\n{}{}▲ Changes for {}:{}", BOLD, CYAN, file_path, RESET);
+        println!("{}{}─────────────────────────────────────────────────────────────{}", BOLD, CYAN, RESET);
         
-        // Show summary if too many changes
-        if total_changes > MAX_DIFF_LINES {
-            println!("{}{}─────────────────────────────────────────────────────────────{}", BOLD, CYAN, RESET);
-            println!("{}{}Large diff detected - showing summary:{}", BOLD, YELLOW, RESET);
-            println!("  {}{}{}{} additions (+), {}{}{}{} deletions (-)", 
-                BLUE, BOLD, total_additions, RESET,
-                RED, BOLD, total_deletions, RESET);
-            println!("  Total: {} lines changed", total_changes);
-            
-            // Show first few and last few changes as preview
-            let preview_lines = 10;
-            let mut shown_lines = 0;
-            
-            println!("\n{}Preview (first {} changes):{}", BOLD, preview_lines, RESET);
-            for op in diff.ops() {
+        // Always show concise summary
+        println!("  {}{}{}{} additions (+), {}{}{}{} deletions (-)", 
+            BLUE, BOLD, total_additions, RESET,
+            RED, BOLD, total_deletions, RESET);
+        
+        // Show a few key changes as preview
+        let preview_lines = 5;
+        let mut shown_lines = 0;
+        let mut has_changes = false;
+        
+        for op in diff.ops() {
+            if shown_lines >= preview_lines { break; }
+            for change in diff.iter_changes(op) {
                 if shown_lines >= preview_lines { break; }
-                for change in diff.iter_changes(op) {
-                    if shown_lines >= preview_lines { break; }
-                    match change.tag() {
-                        ChangeTag::Delete => {
-                            print!("{}-{} ", RED, RESET);
-                            print!("{}{}{}", RED, change.value().chars().take(80).collect::<String>(), RESET);
-                            if change.value().len() > 80 { print!("{}...{}", RED, RESET); }
-                            if !change.value().ends_with('\n') { println!(); }
-                            shown_lines += 1;
-                        },
-                        ChangeTag::Insert => {
-                            print!("{}+{} ", BLUE, RESET);
-                            print!("{}{}{}", BLUE, change.value().chars().take(80).collect::<String>(), RESET);
-                            if change.value().len() > 80 { print!("{}...{}", BLUE, RESET); }
-                            if !change.value().ends_with('\n') { println!(); }
-                            shown_lines += 1;
-                        },
-                        ChangeTag::Equal => {},
-                    }
-                }
-            }
-            
-            if total_changes > preview_lines {
-                println!("{}... and {} more changes{}", YELLOW, total_changes - preview_lines, RESET);
-            }
-        } else {
-            // Show full diff for smaller changes
-            println!("{}{}─────────────────────────────────────────────────────────────{}", BOLD, CYAN, RESET);
-            let mut line_num_old = 1;
-            let mut line_num_new = 1;
-            
-            for (idx, group) in diff.grouped_ops(3).iter().enumerate() {
-                if idx > 0 {
-                    println!("{}{}@@ ... @@{}", BOLD, YELLOW, RESET);
-                }
-                
-                for op in group {
-                    for change in diff.iter_changes(op) {
-                        match change.tag() {
-                            ChangeTag::Delete => {
-                                print!("{}-{:4} {}", RED, line_num_old, RESET);
-                                print!("{}{}{}", RED, change.value(), RESET);
-                                line_num_old += 1;
-                            },
-                            ChangeTag::Insert => {
-                                print!("{}+{:4} {}", BLUE, line_num_new, RESET);
-                                print!("{}{}{}", BLUE, change.value(), RESET);
-                                line_num_new += 1;
-                            },
-                            ChangeTag::Equal => {
-                                print!(" {:4} {}", line_num_old, change.value());
-                                line_num_old += 1;
-                                line_num_new += 1;
-                            },
+                match change.tag() {
+                    ChangeTag::Delete => {
+                        if !has_changes {
+                            println!("\n{}Key changes:{}", BOLD, RESET);
+                            has_changes = true;
                         }
-                        
-                        if !change.value().ends_with('\n') {
-                            println!();
+                        print!("  {}-{} ", RED, RESET);
+                        let line = change.value().trim_end();
+                        let truncated = if line.len() > 60 { 
+                            format!("{}...", &line[..57]) 
+                        } else { 
+                            line.to_string() 
+                        };
+                        println!("{}{}{}", RED, truncated, RESET);
+                        shown_lines += 1;
+                    },
+                    ChangeTag::Insert => {
+                        if !has_changes {
+                            println!("\n{}Key changes:{}", BOLD, RESET);
+                            has_changes = true;
                         }
-                    }
+                        print!("  {}+{} ", BLUE, RESET);
+                        let line = change.value().trim_end();
+                        let truncated = if line.len() > 60 { 
+                            format!("{}...", &line[..57]) 
+                        } else { 
+                            line.to_string() 
+                        };
+                        println!("{}{}{}", BLUE, truncated, RESET);
+                        shown_lines += 1;
+                    },
+                    ChangeTag::Equal => {},
                 }
             }
+        }
+        
+        let total_changes = total_additions + total_deletions;
+        if total_changes > preview_lines {
+            println!("  {}... and {} more changes{}", YELLOW, total_changes - shown_lines, RESET);
         }
         
         println!("{}{}─────────────────────────────────────────────────────────────{}\n", BOLD, CYAN, RESET);

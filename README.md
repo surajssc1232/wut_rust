@@ -110,36 +110,33 @@ $ huh -w @newfile.py "Create a Python script that calculates fibonacci numbers"
 $ huh -w @existing.js "Add error handling to this JavaScript code"
 ```
 
-When editing existing files, Huh will show you a **GitHub-style diff** with **colored output** showing exactly what changes were made:
+When editing existing files, Huh will show you a **concise diff summary** with **colored output** showing exactly what changes were made:
 
-**For small changes (< 50 lines):**
 ```diff
 ▲ Changes for config.json:
 ─────────────────────────────────────────────────────────────
-   1 {
-   2   "database": {
-   3     "host": "localhost",
--  4     "port": 5432          ← Red (deletions)
-+  4     "port": 5432,         ← Blue (additions)
-+  5     "debug": true         ← Blue (additions)
-   5   }
-   6 }
+  3 additions (+), 1 deletions (-)
+
+Key changes:
+  - "port": 5432          ← Red (deletions)
+  + "port": 5432,         ← Blue (additions)
+  + "debug": true         ← Blue (additions)
 ─────────────────────────────────────────────────────────────
 ```
 
-**For large changes (≥ 50 lines):**
+**For files with many changes:**
 ```diff
 ▲ Changes for large_file.js:
 ─────────────────────────────────────────────────────────────
-Large diff detected - showing summary:
   42 additions (+), 15 deletions (-)
-  Total: 57 lines changed
 
-Preview (first 10 changes):
-+ function validateInput(data) {      ← Blue (additions)
-+ function processData(input) {       ← Blue (additions)
-- var oldFunction = function() {      ← Red (deletions)
-... and 47 more changes
+Key changes:
+  + function validateInput(data) {      ← Blue (additions)
+  + function processData(input) {       ← Blue (additions)
+  - var oldFunction = function() {      ← Red (deletions)
+  + const newFunction = () => {         ← Blue (additions)
+  - console.log('old way');             ← Red (deletions)
+  ... and 52 more changes
 ─────────────────────────────────────────────────────────────
 ```
 

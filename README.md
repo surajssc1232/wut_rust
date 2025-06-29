@@ -10,6 +10,8 @@ Huh is a powerful command-line interface (CLI) tool built with Rust, designed to
 
 -   **AI-Powered Command Analysis:** Integrates with the Gemini API to provide intelligent analysis and insights into your most recently executed command.
 -   **Contextual Suggestions:** Offers relevant information and next steps based on the command's output.
+-   **File Creation & Editing:** Create new files or edit existing ones using AI assistance with natural language instructions.
+-   **GitHub-Style Diffs:** See exactly what changes are made with colorized diff output before files are modified.
 -   **History Integration:** Reads your shell history to provide context for the AI analysis.
 -   **Fast and Reliable:** Built with Rust, ensuring high performance, memory safety, and reliability.
 -   **Cross-Platform:** Designed to work seamlessly across various operating systems.
@@ -73,8 +75,9 @@ cargo install huh
 
 ## Usage
 
-After successful installation, you can use Huh to analyze your previous commands.
+After successful installation, you can use Huh in several ways:
 
+### Command Analysis
 To get an analysis of your last executed command, simply type `huh` in your terminal:
 
 ```bash
@@ -82,7 +85,48 @@ $ <your_command_here>
 $ huh
 ```
 
-Huh will then provide an AI-powered analysis and suggestions based on the output of your last command.
+### Query Mode
+You can also ask Huh questions directly:
+
+```bash
+$ huh "How do I list all files in a directory?"
+```
+
+### File Reading and Query
+Read a file and ask questions about it:
+
+```bash
+$ huh @myfile.txt "What does this file do?"
+```
+
+### File Writing and Editing
+Use the new write mode to create or edit files with AI assistance:
+
+```bash
+# Create a new file
+$ huh -w @newfile.py "Create a Python script that calculates fibonacci numbers"
+
+# Edit an existing file
+$ huh -w @existing.js "Add error handling to this JavaScript code"
+```
+
+When editing existing files, Huh will show you a **GitHub-style diff** of the changes before applying them, so you can see exactly what was modified:
+
+```diff
+▲ Changes for config.json:
+─────────────────────────────────────────────────────────────
+   1 {
+   2   "database": {
+   3     "host": "localhost",
+-  4     "port": 5432
++  4     "port": 5432,
++  5     "debug": true
+   5   }
+   6 }
+─────────────────────────────────────────────────────────────
+```
+
+Huh will provide intelligent analysis, suggestions, and file modifications based on your requests.
 
 ## Contributing
 

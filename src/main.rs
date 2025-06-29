@@ -65,6 +65,26 @@ async fn handle_wut_command(api_key: String, model: String) {
     }
 }
 
+async fn handle_write_command(file_path: String, context: String, api_key: String, model: String) {
+    let client = GeminiClient::new(api_key, model);
+
+    let (tx, rx) = oneshot::channel();
+    let animation_handle = tokio::spawn(loading_animation(rx));
+
+    match client.write_or_edit_file(&file_path, &context).await {
+        Ok(()) => {
+            let _ = tx.send(());
+            animation_handle.await.unwrap();
+            println!("✓ File {} has been successfully written/edited!", file_path);
+        }
+        Err(e) => {
+            let _ = tx.send(());
+            animation_handle.await.unwrap();
+            eprintln!("Error writing/editing file: {}", e);
+        }
+    }
+}
+
 async fn handle_query_command(query: String, api_key: String, model: String) {
     let client = GeminiClient::new(api_key, model);
 
@@ -94,7 +114,7 @@ async fn handle_query_command(query: String, api_key: String, model: String) {
 #[tokio::main]
 async fn main() {
     let matches = Command::new("huh")
-        .version("0.1.10")
+        .version("0.2.0")
         .about("AI-powered shell command analysis tool")
         .arg(
             Arg::new("api-key")
@@ -110,6 +130,13 @@ async fn main() {
                 .value_name("MODEL")
                 .default_value("gemini-2.0-flash")
                 .help("Gemini model to use"),
+        )
+        .arg(
+            Arg::new("write")
+                .long("write")
+                .short('w')
+                .action(clap::ArgAction::SetTrue)
+                .help("Write/edit mode - use with @<file> <context>"),
         )
         .arg(
             Arg::new("query")
@@ -132,6 +159,8 @@ async fn main() {
         .cloned()
         .unwrap_or_else(|| "gemini-2.0-flash".to_string());
 
+    let write_mode = matches.get_flag("write");
+
     if let Some(query_args) = matches.get_many::<String>("query") {
         let query_vec: Vec<&str> = query_args.map(|s| s.as_str()).collect();
 
@@ -139,27 +168,51 @@ async fn main() {
             let first_arg = query_vec[0];
             if first_arg.starts_with('@') {
                 let file_path = &first_arg[1..];
-                match fs::read_to_string(file_path) {
-                    Ok(file_content) => {
-                        let mut query =
-                            format!("Content from {}:\n---\n{}\n---\n", file_path, file_content);
-                        if query_vec.len() > 1 {
-                            query.push_str(&query_vec[1..].join(" "));
-                        }
-                        handle_query_command(query, api_key, model).await;
+                
+                if write_mode {
+                    // Write/edit mode: huh -w @file context
+                    if query_vec.len() > 1 {
+                        let context = query_vec[1..].join(" ");
+                        handle_write_command(file_path.to_string(), context, api_key, model).await;
+                    } else {
+                        eprintln!("Error: Write mode requires context. Usage: huh -w @<file> <context>");
                     }
-                    Err(e) => {
-                        eprintln!("Error reading file {}: {}", file_path, e);
+                } else {
+                    // Query mode: huh @file context (existing behavior)
+                    match fs::read_to_string(file_path) {
+                        Ok(file_content) => {
+                            let mut query =
+                                format!("Content from {}:\n---\n{}\n---\n", file_path, file_content);
+                            if query_vec.len() > 1 {
+                                query.push_str(&query_vec[1..].join(" "));
+                            }
+                            handle_query_command(query, api_key, model).await;
+                        }
+                        Err(e) => {
+                            eprintln!("Error reading file {}: {}", file_path, e);
+                        }
                     }
                 }
             } else {
-                let query = query_vec.join(" ");
-                handle_query_command(query, api_key, model).await;
+                if write_mode {
+                    eprintln!("Error: Write mode requires a file path starting with @. Usage: huh -w @<file> <context>");
+                } else {
+                    let query = query_vec.join(" ");
+                    handle_query_command(query, api_key, model).await;
+                }
             }
+        } else {
+            if write_mode {
+                eprintln!("Error: Write mode requires arguments. Usage: huh -w @<file> <context>");
+            } else {
+                handle_wut_command(api_key, model).await;
+            }
+        }
+    } else {
+        if write_mode {
+            eprintln!("Error: Write mode requires arguments. Usage: huh -w @<file> <context>");
         } else {
             handle_wut_command(api_key, model).await;
         }
-    } else {
-        handle_wut_command(api_key, model).await;
     }
 }

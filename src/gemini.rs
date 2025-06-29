@@ -2,6 +2,7 @@ use crate::history::CommandEntry;
 use regex::Regex;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use similar::{ChangeTag, TextDiff};
 use syntect::easy::HighlightLines;
 use syntect::highlighting::ThemeSet;
 use syntect::parsing::SyntaxSet;
@@ -61,6 +62,55 @@ impl GeminiClient {
             syntax_set,
             theme_set,
         }
+    }
+
+    fn display_diff(&self, original: &str, new_content: &str, file_path: &str) {
+        const RED: &str = "\x1b[31m";
+        const GREEN: &str = "\x1b[32m";
+        const CYAN: &str = "\x1b[36m";
+        const YELLOW: &str = "\x1b[33m";
+        const RESET: &str = "\x1b[0m";
+        const BOLD: &str = "\x1b[1m";
+
+        println!("\n{}{}▲ Changes for {}:{}", BOLD, CYAN, file_path, RESET);
+        println!("{}{}─────────────────────────────────────────────────────────────{}", BOLD, CYAN, RESET);
+
+        let diff = TextDiff::from_lines(original, new_content);
+        let mut line_num_old = 1;
+        let mut line_num_new = 1;
+        
+        for (idx, group) in diff.grouped_ops(3).iter().enumerate() {
+            if idx > 0 {
+                println!("{}{}@@ ... @@{}", BOLD, YELLOW, RESET);
+            }
+            
+            for op in group {
+                for change in diff.iter_changes(op) {
+                    match change.tag() {
+                        ChangeTag::Delete => {
+                            print!("{}-{:4} {}", RED, line_num_old, RESET);
+                            print!("{}{}", RED, change.value());
+                            line_num_old += 1;
+                        },
+                        ChangeTag::Insert => {
+                            print!("{}+{:4} {}", GREEN, line_num_new, RESET);
+                            print!("{}{}", GREEN, change.value());
+                            line_num_new += 1;
+                        },
+                        ChangeTag::Equal => {
+                            print!(" {:4} {}", line_num_old, change.value());
+                            line_num_old += 1;
+                            line_num_new += 1;
+                        },
+                    }
+                    
+                    if !change.value().ends_with('\n') {
+                        println!();
+                    }
+                }
+            }
+        }
+        println!("{}{}─────────────────────────────────────────────────────────────{}\n", BOLD, CYAN, RESET);
     }
 
     pub async fn analyze_commands(
@@ -183,6 +233,107 @@ impl GeminiClient {
         }
 
         Ok((gemini_text, suggestion))
+    }
+
+    pub async fn write_or_edit_file(&self, file_path: &str, context: &str) -> Result<(), String> {
+        let file_exists = std::fs::metadata(file_path).is_ok();
+        let original_content = if file_exists {
+            std::fs::read_to_string(file_path)
+                .map_err(|e| format!("Failed to read existing file: {}", e))?
+        } else {
+            String::new()
+        };
+        
+        let prompt = if file_exists {
+            // Edit existing file
+            format!(
+                "You are a helpful file editor. I need you to edit the following file based on my instructions.\n\n\
+                File path: {}\n\n\
+                Current file content:\n\
+                ```\n{}\n```\n\n\
+                Instructions: {}\n\n\
+                Please provide the complete updated file content. Only output the file content, no explanations or markdown formatting.",
+                file_path, original_content, context
+            )
+        } else {
+            // Create new file
+            format!(
+                "You are a helpful file creator. I need you to create a new file based on my instructions.\n\n\
+                File path: {}\n\n\
+                Instructions: {}\n\n\
+                Please provide the complete file content that should be written to this file. Only output the file content, no explanations or markdown formatting.",
+                file_path, context
+            )
+        };
+
+        let request = GeminiRequest {
+            contents: vec![Content {
+                parts: vec![Part { text: prompt }],
+            }],
+        };
+
+        let url = format!(
+            "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
+            self.model, self.api_key
+        );
+
+        let response = self
+            .client
+            .post(&url)
+            .header("Content-Type", "application/json")
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| format!("Request failed: {}", e))?;
+
+        if !response.status().is_success() {
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(format!("API error: {}", error_text));
+        }
+
+        let gemini_response: GeminiResponse = response
+            .json()
+            .await
+            .map_err(|e| format!("Failed to parse response: {}", e))?;
+
+        let file_content = gemini_response
+            .candidates
+            .into_iter()
+            .next()
+            .and_then(|c| c.content.parts.into_iter().next())
+            .map(|p| p.text)
+            .ok_or_else(|| "No response from Gemini".to_string())?;
+
+        // Clean up the response - remove code block markers if present
+        let cleaned_content = file_content
+            .trim()
+            .strip_prefix("```")
+            .unwrap_or(&file_content)
+            .strip_suffix("```")
+            .unwrap_or(&file_content)
+            .trim();
+
+        // Show diff if file exists and content changed
+        if file_exists && original_content.trim() != cleaned_content.trim() {
+            self.display_diff(&original_content, cleaned_content, file_path);
+        } else if !file_exists {
+            println!("\n+ Creating new file: {}", file_path);
+        } else {
+            println!("\n✓ No changes needed - file content is already up to date");
+            return Ok(());
+        }
+
+        // Create parent directories if they don't exist
+        if let Some(parent) = std::path::Path::new(file_path).parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to create parent directories: {}", e))?;
+        }
+
+        // Write the file
+        std::fs::write(file_path, cleaned_content)
+            .map_err(|e| format!("Failed to write file: {}", e))?;
+
+        Ok(())
     }
 
     pub async fn query_gemini(&self, query: &str) -> Result<String, String> {

@@ -475,7 +475,7 @@ checksum = "df3b46402a9d5adb4c86a0cf463f42e19994e3ee891101b1841f30a545cb49a9"
 
 [[package]]
 name = "huh"
-version = "0.1.11"
+version = "0.2.0"
 dependencies = [
  "clap",
  "dirs",
@@ -483,6 +483,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "similar",
  "strsim",
  "syntect",
  "tokio",
@@ -1210,6 +1211,12 @@ checksum = "9203b8055f63a2a00e2f593bb0510367fe707d7ff1e5c872de2f537b339e5410"
 dependencies = [
  "libc",
 ]
+
+[[package]]
+name = "similar"
+version = "2.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbbb5d9659141646ae647b42fe094daf6c6192d1620870b449d9557f748b2daa"
 
 [[package]]
 name = "slab"

@@ -64,10 +64,9 @@ impl GeminiClient {
         }
     }
 
-    fn display_diff(&self, original: &str, new_content: &str, file_path: &str) {
+    fn display_diff(&self, original: &str, new_content: &str, _file_path: &str) {
         const RED: &str = "\x1b[31m";
         const BLUE: &str = "\x1b[34m";     // Changed from GREEN to BLUE for additions
-        const CYAN: &str = "\x1b[36m";
         const YELLOW: &str = "\x1b[33m";
         const RESET: &str = "\x1b[0m";
         const BOLD: &str = "\x1b[1m";
@@ -87,12 +86,9 @@ impl GeminiClient {
                 }
             }
         }
-
-        println!("\n{}{}▲ Changes for {}:{}", BOLD, CYAN, file_path, RESET);
-        println!("{}{}─────────────────────────────────────────────────────────────{}", BOLD, CYAN, RESET);
         
         // Always show concise summary
-        println!("  {}{}{}{} additions (+), {}{}{}{} deletions (-)", 
+        println!("\n  {}{}{}{} additions (+), {}{}{}{} deletions (-)", 
             BLUE, BOLD, total_additions, RESET,
             RED, BOLD, total_deletions, RESET);
         
@@ -146,7 +142,6 @@ impl GeminiClient {
             println!("  {}... and {} more changes{}", YELLOW, total_changes - shown_lines, RESET);
         }
         
-        println!("{}{}─────────────────────────────────────────────────────────────{}\n", BOLD, CYAN, RESET);
     }
 
     pub async fn analyze_commands(

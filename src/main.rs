@@ -3,6 +3,7 @@ mod history;
 mod prompt;
 mod shell;
 
+use clap::{Arg, Command};
 use gemini::GeminiClient;
 use history::HistoryManager;
 use std::env;
@@ -33,7 +34,7 @@ async fn loading_animation(mut rx: oneshot::Receiver<()>) {
     io::stdout().flush().unwrap();
 }
 
-async fn handle_wut_command() {
+async fn handle_wut_command(api_key: String, model: String) {
     let history_manager = HistoryManager::new().unwrap();
     let commands = history_manager.get_last_commands(2).unwrap();
 
@@ -42,14 +43,13 @@ async fn handle_wut_command() {
         return;
     }
 
-    let api_key = env::var("GEMINI_API_KEY").expect("GEMINI_API_KEY not set");
-    let client = GeminiClient::new(api_key);
+    let client = GeminiClient::new(api_key, model);
 
     let (tx, rx) = oneshot::channel();
     let animation_handle = tokio::spawn(loading_animation(rx));
 
     match client.analyze_commands(&commands).await {
-        Ok((analysis_text, suggestion)) => {
+        Ok((analysis_text, _suggestion)) => {
             let _ = tx.send(());
             animation_handle.await.unwrap();
 
@@ -60,7 +60,7 @@ async fn handle_wut_command() {
             }
             println!();
 
-            if suggestion.is_some() {}
+            
         }
         Err(e) => {
             let _ = tx.send(());
@@ -70,9 +70,8 @@ async fn handle_wut_command() {
     }
 }
 
-async fn handle_query_command(query: String) {
-    let api_key = env::var("GEMINI_API_KEY").expect("GEMINI_API_KEY not set");
-    let client = GeminiClient::new(api_key);
+async fn handle_query_command(query: String, api_key: String, model: String) {
+    let client = GeminiClient::new(api_key, model);
 
     let (tx, rx) = oneshot::channel();
     let animation_handle = tokio::spawn(loading_animation(rx));
@@ -99,33 +98,71 @@ async fn handle_query_command(query: String) {
 
 #[tokio::main]
 async fn main() {
-    let args: Vec<String> = env::args().collect();
+    let matches = Command::new("huh")
+        .version("0.1.10")
+        .about("AI-powered shell command analysis tool")
+        .arg(
+            Arg::new("api-key")
+                .long("api-key")
+                .short('k')
+                .value_name("KEY")
+                .help("Google Gemini API key (overrides GEMINI_API_KEY env var)")
+        )
+        .arg(
+            Arg::new("model")
+                .long("model")
+                .short('m')
+                .value_name("MODEL")
+                .default_value("gemini-2.0-flash")
+                .help("Gemini model to use")
+        )
+        .arg(
+            Arg::new("query")
+                .help("Query to send to Gemini")
+                .num_args(0..)
+                .trailing_var_arg(true)
+        )
+        .get_matches();
 
-    if args.len() > 1 {
-        let first_arg = &args[1];
-        if first_arg.starts_with('@') {
-            let file_path = &first_arg[1..];
-            match fs::read_to_string(file_path) {
-                Ok(file_content) => {
-                    let mut query = format!("Content from {}:
----
-{}
----
-", file_path, file_content);
-                    if args.len() > 2 {
-                        query.push_str(&args[2..].join(" "));
+    // Get API key from CLI argument or environment variable
+    let api_key = matches
+        .get_one::<String>("api-key")
+        .cloned()
+        .or_else(|| env::var("GEMINI_API_KEY").ok())
+        .expect("API key must be provided via --api-key flag or GEMINI_API_KEY environment variable");
+
+    let model = matches
+        .get_one::<String>("model")
+        .cloned()
+        .unwrap_or_else(|| "gemini-2.0-flash".to_string());
+
+    if let Some(query_args) = matches.get_many::<String>("query") {
+        let query_vec: Vec<&str> = query_args.map(|s| s.as_str()).collect();
+        
+        if !query_vec.is_empty() {
+            let first_arg = query_vec[0];
+            if first_arg.starts_with('@') {
+                let file_path = &first_arg[1..];
+                match fs::read_to_string(file_path) {
+                    Ok(file_content) => {
+                        let mut query = format!("Content from {}:\n---\n{}\n---\n", file_path, file_content);
+                        if query_vec.len() > 1 {
+                            query.push_str(&query_vec[1..].join(" "));
+                        }
+                        handle_query_command(query, api_key, model).await;
                     }
-                    handle_query_command(query).await;
+                    Err(e) => {
+                        eprintln!("Error reading file {}: {}", file_path, e);
+                    }
                 }
-                Err(e) => {
-                    eprintln!("Error reading file {}: {}", file_path, e);
-                }
+            } else {
+                let query = query_vec.join(" ");
+                handle_query_command(query, api_key, model).await;
             }
         } else {
-            let query = args[1..].join(" ");
-            handle_query_command(query).await;
+            handle_wut_command(api_key, model).await;
         }
     } else {
-        handle_wut_command().await;
+        handle_wut_command(api_key, model).await;
     }
 }

@@ -4,7 +4,7 @@
 
 ## Overview
 
-Wut Rust is a powerful command-line interface (CLI) tool built with Rust, designed to enhance your shell experience. Leveraging the Gemini API, it provides intelligent analysis and suggestions for your previously executed commands, making your terminal more efficient and intuitive.
+Huh is a powerful command-line interface (CLI) tool built with Rust, designed to enhance your shell experience. Leveraging the Gemini API, it provides intelligent analysis and suggestions for your previously executed commands, making your terminal more efficient and intuitive.
 
 ## Features
 
@@ -18,7 +18,7 @@ Wut Rust is a powerful command-line interface (CLI) tool built with Rust, design
 
 Before you begin, ensure you have the following installed on your system:
 
--   **Rust and Cargo:** Wut Rust is built with Rust. If you don't have Rust and Cargo (Rust's package manager and build system) installed, you can get them by running the following command in your terminal:
+-   **Rust and Cargo:** Huh is built with Rust. If you don't have Rust and Cargo (Rust's package manager and build system) installed, you can get them by running the following command in your terminal:
 
     ```bash
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
@@ -38,7 +38,7 @@ Before you begin, ensure you have the following installed on your system:
 
 ## Installation
 
-To get a copy of Wut Rust up and running on your local machine, follow these steps:
+To get a copy of Huh up and running on your local machine, follow these steps:
 
 1.  **Clone the repository:**
 
@@ -55,7 +55,7 @@ To get a copy of Wut Rust up and running on your local machine, follow these ste
     cargo build --release
     ```
 
-    This command compiles the project in release mode, optimizing it for performance. The executable will be located in `target/release/wut_rust`.
+    This command compiles the project in release mode, optimizing it for performance. The executable will be located in `target/release/huh`.
 
 3.  **Install the executable:**
 
@@ -73,16 +73,16 @@ cargo install huh
 
 ## Usage
 
-After successful installation, you can use Wut Rust to analyze your previous commands.
+After successful installation, you can use Huh to analyze your previous commands.
 
-To get an analysis of your last executed command, simply type `wut` in your terminal:
+To get an analysis of your last executed command, simply type `huh` in your terminal:
 
 ```bash
 $ <your_command_here>
 $ huh
 ```
 
-Wut Rust will then provide an AI-powered analysis and suggestions based on the output of your last command.
+Huh will then provide an AI-powered analysis and suggestions based on the output of your last command.
 
 ## Contributing
 

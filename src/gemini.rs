@@ -2,10 +2,10 @@ use crate::history::CommandEntry;
 use regex::Regex;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use syntect::easy::HighlightLines;
 use syntect::highlighting::ThemeSet;
 use syntect::parsing::SyntaxSet;
 use syntect::util::as_24_bit_terminal_escaped;
-use syntect::easy::HighlightLines;
 
 #[derive(Serialize)]
 struct GeminiRequest {
@@ -45,23 +45,28 @@ struct ResponsePart {
 pub struct GeminiClient {
     client: Client,
     api_key: String,
+    model: String,
     syntax_set: SyntaxSet,
     theme_set: ThemeSet,
 }
 
 impl GeminiClient {
-    pub fn new(api_key: String) -> Self {
+    pub fn new(api_key: String, model: String) -> Self {
         let syntax_set = SyntaxSet::load_defaults_newlines();
         let theme_set = ThemeSet::load_defaults();
         Self {
             client: Client::new(),
             api_key,
+            model,
             syntax_set,
             theme_set,
         }
     }
 
-    pub async fn analyze_commands(&self, commands: &[CommandEntry]) -> Result<(String, Option<String>), String> {
+    pub async fn analyze_commands(
+        &self,
+        commands: &[CommandEntry],
+    ) -> Result<(String, Option<String>), String> {
         let prompt = self.format_prompt(commands);
 
         let request = GeminiRequest {
@@ -71,8 +76,8 @@ impl GeminiClient {
         };
 
         let url = format!(
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={}",
-            self.api_key
+            "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
+            self.model, self.api_key
         );
 
         let response = self
@@ -109,11 +114,26 @@ impl GeminiClient {
         const RESET: &str = "\x1b[0m";
 
         let mut suggestion = None;
-        let suggestion_regex = Regex::new(r"(?i)Did you mean:\s*`?([^`\n]+)`?").unwrap();
-        if let Some(caps) = suggestion_regex.captures(&gemini_text) {
-            suggestion = Some(caps.get(1).unwrap().as_str().to_string());
-            gemini_text = suggestion_regex.replace_all(&gemini_text, "").to_string();
+
+        // --- Pass 1: Extract the first valid suggestion ---
+        let suggestion_capture_regex = Regex::new(r"(?im)^did you mean[:\s`*]*([^`*\n\r]+?)[`*\s]*$").unwrap();
+        if let Some(caps) = suggestion_capture_regex.captures(&gemini_text) {
+            suggestion = Some(caps.get(1).unwrap().as_str().trim().to_string());
         }
+
+        // --- Pass 2: Aggressively remove all "Did you mean" lines ---
+        let cleanup_did_you_mean_regex = Regex::new(r"(?im)^did you mean[:\s`*].*$").unwrap();
+        let mut cleaned_text = cleanup_did_you_mean_regex.replace_all(&gemini_text, "").to_string();
+
+        // --- Pass 3: Remove standalone commands that are likely stray suggestions ---
+        let stray_command_regex = Regex::new(r"\n\n\s*([a-zA-Z0-9_ -]+)\s*\n\n").unwrap();
+        if suggestion.is_some() {
+            cleaned_text = stray_command_regex.replace_all(&cleaned_text, "\n\n").to_string();
+        }
+
+        // --- Pass 4: Final whitespace cleanup ---
+        let extra_newlines_regex = Regex::new(r"\n{3,}").unwrap();
+        gemini_text = extra_newlines_regex.replace_all(&cleaned_text, "\n\n").to_string().trim().to_string();
 
         gemini_text = self.convert_markdown_to_ansi(&gemini_text);
 
@@ -150,7 +170,9 @@ impl GeminiClient {
 {}{}{}
 {}",
                 RED,
-                "Did you mean:", RESET,sugg.trim()
+                "Did you mean:",
+                RESET,
+                sugg.trim()
             ));
         }
 
@@ -158,7 +180,10 @@ impl GeminiClient {
     }
 
     pub async fn query_gemini(&self, query: &str) -> Result<String, String> {
-        let prompt = format!("You are a helpful assistant. Please answer the following query:\n\n{}", query);
+        let prompt = format!(
+            "You are a helpful assistant. Please answer the following query:\n\n{}",
+            query
+        );
 
         let request = GeminiRequest {
             contents: vec![Content {
@@ -167,8 +192,8 @@ impl GeminiClient {
         };
 
         let url = format!(
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={}",
-            self.api_key
+            "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
+            self.model, self.api_key
         );
 
         let response = self
@@ -239,17 +264,17 @@ impl GeminiClient {
 
     fn find_syntax_for_language(&self, lang: &str) -> &syntect::parsing::SyntaxReference {
         let lang_lower = lang.to_lowercase();
-        
+
         // First try by name
         if let Some(syntax) = self.syntax_set.find_syntax_by_name(&lang_lower) {
             return syntax;
         }
-        
+
         // Then try by extension
         if let Some(syntax) = self.syntax_set.find_syntax_by_extension(&lang_lower) {
             return syntax;
         }
-        
+
         // Try common language mappings
         let mapped_lang = match lang_lower.as_str() {
             "js" | "javascript" | "node" => "JavaScript",
@@ -311,14 +336,14 @@ impl GeminiClient {
             "text" | "txt" => "Plain Text",
             _ => "",
         };
-        
+
         // Try the mapped language name
         if !mapped_lang.is_empty() {
             if let Some(syntax) = self.syntax_set.find_syntax_by_name(mapped_lang) {
                 return syntax;
             }
         }
-        
+
         // Try finding by first line patterns for specific languages
         self.syntax_set.find_syntax_plain_text()
     }
@@ -353,15 +378,21 @@ impl GeminiClient {
                         let theme = &self.theme_set.themes["base16-ocean.dark"];
 
                         let mut highlighter = HighlightLines::new(syntax, theme);
-                        let highlighted_code = code.lines().map(|line| {
-                            let ranges: Vec<(syntect::highlighting::Style, &str)> = highlighter.highlight_line(line, &self.syntax_set).unwrap_or_default();
-                            if ranges.is_empty() {
-                                line.to_string()
-                            } else {
-                                as_24_bit_terminal_escaped(&ranges[..], false)
-                            }
-                        }).collect::<Vec<String>>().join("\n");
-                        result_lines.push(self.wrap_text(&highlighted_code, MAX_LINE_WIDTH, 0));
+                        let highlighted_code = code
+                            .lines()
+                            .map(|line| {
+                                let ranges: Vec<(syntect::highlighting::Style, &str)> = highlighter
+                                    .highlight_line(line, &self.syntax_set)
+                                    .unwrap_or_default();
+                                if ranges.is_empty() {
+                                    line.to_string()
+                                } else {
+                                    as_24_bit_terminal_escaped(&ranges[..], false)
+                                }
+                            })
+                            .collect::<Vec<String>>()
+                            .join("\n");
+                        result_lines.push(highlighted_code);
                     }
                 } else {
                     // Start of code block
@@ -409,27 +440,35 @@ impl GeminiClient {
                 line_indent_for_wrapping = 0;
             }
 
+            // Remove standalone asterisks and fix broken formatting
+            processed_line = processed_line
+                .replace("**", "")
+                .replace("* ", "")
+                .replace(" *", "");
+
             let bold_regex = Regex::new(r"\*\*(.*?)\*\*|__(.*?)__").unwrap();
             processed_line = bold_regex
                 .replace_all(&processed_line, &format!("{}{}{}", BOLD, "$1$2", RESET))
                 .to_string();
-            
-            let italics_regex = Regex::new(r"\*(.*?)\*|_(.*?)_").unwrap();
+
+            // More careful italics regex - only match when there's content between asterisks
+            let italics_regex =
+                Regex::new(r"\*([^*\s][^*]*[^*\s])\*|_([^_\s][^_]*[^_\s])_").unwrap();
             processed_line = italics_regex
                 .replace_all(&processed_line, &format!("{}{}{}", ITALIC, "$1$2", RESET))
                 .to_string();
-            
+
             // Enhanced inline code highlighting
             let monospace_regex = Regex::new(r"`([^`]+)`").unwrap();
             processed_line = monospace_regex
                 .replace_all(&processed_line, &format!("{}{}{}", CYAN, "$1", RESET))
                 .to_string();
-            
+
             let heading_regex = Regex::new(r"^#\s*(.*)$").unwrap();
             processed_line = heading_regex
                 .replace_all(&processed_line, &format!("\n{}{}{}\n", BOLD, "$1", RESET))
                 .to_string();
-            
+
             processed_line =
                 self.wrap_text(&processed_line, MAX_LINE_WIDTH, line_indent_for_wrapping);
 

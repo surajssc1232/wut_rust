@@ -110,19 +110,36 @@ $ huh -w @newfile.py "Create a Python script that calculates fibonacci numbers"
 $ huh -w @existing.js "Add error handling to this JavaScript code"
 ```
 
-When editing existing files, Huh will show you a **GitHub-style diff** of the changes before applying them, so you can see exactly what was modified:
+When editing existing files, Huh will show you a **GitHub-style diff** with **colored output** showing exactly what changes were made:
 
+**For small changes (< 50 lines):**
 ```diff
 ▲ Changes for config.json:
 ─────────────────────────────────────────────────────────────
    1 {
    2   "database": {
    3     "host": "localhost",
--  4     "port": 5432
-+  4     "port": 5432,
-+  5     "debug": true
+-  4     "port": 5432          ← Red (deletions)
++  4     "port": 5432,         ← Blue (additions)
++  5     "debug": true         ← Blue (additions)
    5   }
    6 }
+─────────────────────────────────────────────────────────────
+```
+
+**For large changes (≥ 50 lines):**
+```diff
+▲ Changes for large_file.js:
+─────────────────────────────────────────────────────────────
+Large diff detected - showing summary:
+  42 additions (+), 15 deletions (-)
+  Total: 57 lines changed
+
+Preview (first 10 changes):
++ function validateInput(data) {      ← Blue (additions)
++ function processData(input) {       ← Blue (additions)
+- var oldFunction = function() {      ← Red (deletions)
+... and 47 more changes
 ─────────────────────────────────────────────────────────────
 ```
 

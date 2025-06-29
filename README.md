@@ -86,6 +86,7 @@ To get an analysis of your last executed command, simply type `huh` in your term
 $ <your_command_here>
 $ huh
 ```
+**Important Note:** `huh` analyzes the *last directly executed command* in your shell history. It does not work with piped commands like `history | tail -n 3` because such commands only capture the command itself, not its output, and `huh` needs to capture the command as it's executed by the shell.
 
 ### Query Mode
 You can also ask Huh questions directly:

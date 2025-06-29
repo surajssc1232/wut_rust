@@ -38,6 +38,8 @@ Before you begin, ensure you have the following installed on your system:
 
     It's recommended to add this line to your shell's configuration file (e.g., `.bashrc`, `.zshrc`, `config.fish`) to make it persistent.
 
+-   **Tmux:** Huh is designed to be used within a `tmux` session. It is not possible to read the output of `huh` without `tmux` as it relies on `tmux` panes for displaying information. Please ensure `tmux` is installed and you are running `huh` within a `tmux` session. You can install `tmux` using your system's package manager (e.g., `sudo apt-get install tmux` on Debian/Ubuntu, `sudo yum install tmux` on CentOS/RHEL, `brew install tmux` on macOS).
+
 ## Installation
 
 To get a copy of Huh up and running on your local machine, follow these steps:

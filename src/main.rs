@@ -7,8 +7,8 @@ use clap::{Arg, Command};
 use gemini::GeminiClient;
 use history::HistoryManager;
 use std::env;
-use std::io::{self, Write};
 use std::fs;
+use std::io::{self, Write};
 use std::time::Duration;
 use tokio::select;
 use tokio::sync::oneshot;
@@ -56,8 +56,6 @@ async fn handle_wut_command(api_key: String, model: String) {
             print!("{}", analysis_text);
             println!();
             io::stdout().flush().unwrap();
-
-            
         }
         Err(e) => {
             let _ = tx.send(());
@@ -103,7 +101,7 @@ async fn main() {
                 .long("api-key")
                 .short('k')
                 .value_name("KEY")
-                .help("Google Gemini API key (overrides GEMINI_API_KEY env var)")
+                .help("Google Gemini API key (overrides GEMINI_API_KEY env var)"),
         )
         .arg(
             Arg::new("model")
@@ -111,22 +109,23 @@ async fn main() {
                 .short('m')
                 .value_name("MODEL")
                 .default_value("gemini-2.0-flash")
-                .help("Gemini model to use")
+                .help("Gemini model to use"),
         )
         .arg(
             Arg::new("query")
                 .help("Query to send to Gemini")
                 .num_args(0..)
-                .trailing_var_arg(true)
+                .trailing_var_arg(true),
         )
         .get_matches();
 
-    // Get API key from CLI argument or environment variable
     let api_key = matches
         .get_one::<String>("api-key")
         .cloned()
         .or_else(|| env::var("GEMINI_API_KEY").ok())
-        .expect("API key must be provided via --api-key flag or GEMINI_API_KEY environment variable");
+        .expect(
+            "API key must be provided via --api-key flag or GEMINI_API_KEY environment variable",
+        );
 
     let model = matches
         .get_one::<String>("model")
@@ -135,14 +134,15 @@ async fn main() {
 
     if let Some(query_args) = matches.get_many::<String>("query") {
         let query_vec: Vec<&str> = query_args.map(|s| s.as_str()).collect();
-        
+
         if !query_vec.is_empty() {
             let first_arg = query_vec[0];
             if first_arg.starts_with('@') {
                 let file_path = &first_arg[1..];
                 match fs::read_to_string(file_path) {
                     Ok(file_content) => {
-                        let mut query = format!("Content from {}:\n---\n{}\n---\n", file_path, file_content);
+                        let mut query =
+                            format!("Content from {}:\n---\n{}\n---\n", file_path, file_content);
                         if query_vec.len() > 1 {
                             query.push_str(&query_vec[1..].join(" "));
                         }

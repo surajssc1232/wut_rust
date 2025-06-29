@@ -44,5 +44,3 @@ mod tests {
         assert!(shell_name != "error");
     }
 }
-
-

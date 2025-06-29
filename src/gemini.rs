@@ -115,27 +115,31 @@ impl GeminiClient {
 
         let mut suggestion = None;
 
-        // --- Pass 1: Extract the first valid suggestion ---
-        let suggestion_capture_regex = Regex::new(r"(?im)^did you mean[:\s`*]*([^`*\n\r]+?)[`*\s]*$").unwrap();
+        let suggestion_capture_regex =
+            Regex::new(r"(?im)^did you mean[:\s`*]*([^`*\n\r]+?)[`*\s]*$").unwrap();
         if let Some(caps) = suggestion_capture_regex.captures(&gemini_text) {
             suggestion = Some(caps.get(1).unwrap().as_str().trim().to_string());
         }
 
-        // --- Pass 2: Aggressively remove all "Did you mean" lines ---
         let cleanup_did_you_mean_regex = Regex::new(r"(?im)^did you mean[:\s`*].*$").unwrap();
-        let mut cleaned_text = cleanup_did_you_mean_regex.replace_all(&gemini_text, "").to_string();
+        let mut cleaned_text = cleanup_did_you_mean_regex
+            .replace_all(&gemini_text, "")
+            .to_string();
 
-        // --- Pass 3: If a suggestion was found, remove all occurrences of it from the cleaned text
-        //             to prevent it from appearing in Analysis or Next Steps sections. ---
         if let Some(ref sugg) = suggestion {
             let escaped_sugg = regex::escape(sugg);
             let suggestion_removal_regex = Regex::new(&format!(r"(?i){}", escaped_sugg)).unwrap();
-            cleaned_text = suggestion_removal_regex.replace_all(&cleaned_text, "").to_string();
+            cleaned_text = suggestion_removal_regex
+                .replace_all(&cleaned_text, "")
+                .to_string();
         }
 
-        // --- Pass 4: Final whitespace cleanup ---
         let extra_newlines_regex = Regex::new(r"\n{3,}").unwrap();
-        gemini_text = extra_newlines_regex.replace_all(&cleaned_text, "\n\n").to_string().trim().to_string();
+        gemini_text = extra_newlines_regex
+            .replace_all(&cleaned_text, "\n\n")
+            .to_string()
+            .trim()
+            .to_string();
 
         gemini_text = self.convert_markdown_to_ansi(&gemini_text);
 
@@ -233,7 +237,6 @@ impl GeminiClient {
         let mut current_line = String::new();
         let effective_width = max_width - current_indent;
 
-        // Regex to strip ANSI escape codes
         let ansi_regex = Regex::new(r"\x1b\[[0-9;]*[a-zA-Z]").unwrap();
 
         for word in text.split_whitespace() {
@@ -267,17 +270,14 @@ impl GeminiClient {
     fn find_syntax_for_language(&self, lang: &str) -> &syntect::parsing::SyntaxReference {
         let lang_lower = lang.to_lowercase();
 
-        // First try by name
         if let Some(syntax) = self.syntax_set.find_syntax_by_name(&lang_lower) {
             return syntax;
         }
 
-        // Then try by extension
         if let Some(syntax) = self.syntax_set.find_syntax_by_extension(&lang_lower) {
             return syntax;
         }
 
-        // Try common language mappings
         let mapped_lang = match lang_lower.as_str() {
             "js" | "javascript" | "node" => "JavaScript",
             "ts" | "typescript" => "TypeScript",
@@ -339,14 +339,12 @@ impl GeminiClient {
             _ => "",
         };
 
-        // Try the mapped language name
         if !mapped_lang.is_empty() {
             if let Some(syntax) = self.syntax_set.find_syntax_by_name(mapped_lang) {
                 return syntax;
             }
         }
 
-        // Try finding by first line patterns for specific languages
         self.syntax_set.find_syntax_plain_text()
     }
 
@@ -370,7 +368,6 @@ impl GeminiClient {
         for line in text.lines() {
             if line.starts_with("```") {
                 if in_code_block {
-                    // End of code block
                     in_code_block = false;
                     let code = code_block_content.join("\n");
                     code_block_content.clear();
@@ -397,10 +394,8 @@ impl GeminiClient {
                         result_lines.push(highlighted_code);
                     }
                 } else {
-                    // Start of code block
                     in_code_block = true;
                     code_block_lang = line.trim_start_matches("```").trim().to_string();
-                    // If no language specified, try to detect from content later
                     if code_block_lang.is_empty() {
                         code_block_lang = "text".to_string();
                     }
@@ -442,7 +437,6 @@ impl GeminiClient {
                 line_indent_for_wrapping = 0;
             }
 
-            // Remove standalone asterisks and fix broken formatting
             processed_line = processed_line
                 .replace("**", "")
                 .replace("* ", "")
@@ -453,14 +447,12 @@ impl GeminiClient {
                 .replace_all(&processed_line, &format!("{}{}{}", BOLD, "$1$2", RESET))
                 .to_string();
 
-            // More careful italics regex - only match when there's content between asterisks
             let italics_regex =
                 Regex::new(r"\*([^*\s][^*]*[^*\s])\*|_([^_\s][^_]*[^_\s])_").unwrap();
             processed_line = italics_regex
                 .replace_all(&processed_line, &format!("{}{}{}", ITALIC, "$1$2", RESET))
                 .to_string();
 
-            // Enhanced inline code highlighting
             let monospace_regex = Regex::new(r"`([^`]+)`").unwrap();
             processed_line = monospace_regex
                 .replace_all(&processed_line, &format!("{}{}{}", CYAN, "$1", RESET))

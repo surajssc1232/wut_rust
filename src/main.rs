@@ -53,12 +53,9 @@ async fn handle_wut_command(api_key: String, model: String) {
             let _ = tx.send(());
             animation_handle.await.unwrap();
 
-            for char_code in analysis_text.chars() {
-                print!("{}", char_code);
-                io::stdout().flush().unwrap();
-                tokio::time::sleep(Duration::from_millis(3)).await;
-            }
+            print!("{}", analysis_text);
             println!();
+            io::stdout().flush().unwrap();
 
             
         }

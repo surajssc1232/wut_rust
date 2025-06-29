@@ -125,10 +125,12 @@ impl GeminiClient {
         let cleanup_did_you_mean_regex = Regex::new(r"(?im)^did you mean[:\s`*].*$").unwrap();
         let mut cleaned_text = cleanup_did_you_mean_regex.replace_all(&gemini_text, "").to_string();
 
-        // --- Pass 3: Remove standalone commands that are likely stray suggestions ---
-        let stray_command_regex = Regex::new(r"\n\n\s*([a-zA-Z0-9_ -]+)\s*\n\n").unwrap();
-        if suggestion.is_some() {
-            cleaned_text = stray_command_regex.replace_all(&cleaned_text, "\n\n").to_string();
+        // --- Pass 3: If a suggestion was found, remove all occurrences of it from the cleaned text
+        //             to prevent it from appearing in Analysis or Next Steps sections. ---
+        if let Some(ref sugg) = suggestion {
+            let escaped_sugg = regex::escape(sugg);
+            let suggestion_removal_regex = Regex::new(&format!(r"(?i){}", escaped_sugg)).unwrap();
+            cleaned_text = suggestion_removal_regex.replace_all(&cleaned_text, "").to_string();
         }
 
         // --- Pass 4: Final whitespace cleanup ---

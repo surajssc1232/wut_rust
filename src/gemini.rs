@@ -66,41 +66,43 @@ impl GeminiClient {
 
     fn display_diff(&self, original: &str, new_content: &str, _file_path: &str) {
         const RED: &str = "\x1b[31m";
-        const BLUE: &str = "\x1b[34m";     // Changed from GREEN to BLUE for additions
+        const BLUE: &str = "\x1b[34m";
         const YELLOW: &str = "\x1b[33m";
         const RESET: &str = "\x1b[0m";
         const BOLD: &str = "\x1b[1m";
 
         let diff = TextDiff::from_lines(original, new_content);
-        
-        // Count total changes
+
         let mut total_additions = 0;
         let mut total_deletions = 0;
-        
+
         for op in diff.ops() {
             for change in diff.iter_changes(op) {
                 match change.tag() {
                     ChangeTag::Delete => total_deletions += 1,
                     ChangeTag::Insert => total_additions += 1,
-                    ChangeTag::Equal => {},
+                    ChangeTag::Equal => {}
                 }
             }
         }
-        
-        // Always show concise summary
-        println!("\n  {}{}{}{} additions (+), {}{}{}{} deletions (-)", 
-            BLUE, BOLD, total_additions, RESET,
-            RED, BOLD, total_deletions, RESET);
-        
-        // Show a few key changes as preview
+
+        println!(
+            "\n  {}{}{}{} additions (+), {}{}{}{} deletions (-)",
+            BLUE, BOLD, total_additions, RESET, RED, BOLD, total_deletions, RESET
+        );
+
         let preview_lines = 5;
         let mut shown_lines = 0;
         let mut has_changes = false;
-        
+
         for op in diff.ops() {
-            if shown_lines >= preview_lines { break; }
+            if shown_lines >= preview_lines {
+                break;
+            }
             for change in diff.iter_changes(op) {
-                if shown_lines >= preview_lines { break; }
+                if shown_lines >= preview_lines {
+                    break;
+                }
                 match change.tag() {
                     ChangeTag::Delete => {
                         if !has_changes {
@@ -109,14 +111,14 @@ impl GeminiClient {
                         }
                         print!("  {}-{} ", RED, RESET);
                         let line = change.value().trim_end();
-                        let truncated = if line.len() > 60 { 
-                            format!("{}...", &line[..57]) 
-                        } else { 
-                            line.to_string() 
+                        let truncated = if line.len() > 60 {
+                            format!("{}...", &line[..57])
+                        } else {
+                            line.to_string()
                         };
                         println!("{}{}{}", RED, truncated, RESET);
                         shown_lines += 1;
-                    },
+                    }
                     ChangeTag::Insert => {
                         if !has_changes {
                             println!("\n{}Key changes:{}", BOLD, RESET);
@@ -124,24 +126,28 @@ impl GeminiClient {
                         }
                         print!("  {}+{} ", BLUE, RESET);
                         let line = change.value().trim_end();
-                        let truncated = if line.len() > 60 { 
-                            format!("{}...", &line[..57]) 
-                        } else { 
-                            line.to_string() 
+                        let truncated = if line.len() > 60 {
+                            format!("{}...", &line[..57])
+                        } else {
+                            line.to_string()
                         };
                         println!("{}{}{}", BLUE, truncated, RESET);
                         shown_lines += 1;
-                    },
-                    ChangeTag::Equal => {},
+                    }
+                    ChangeTag::Equal => {}
                 }
             }
         }
-        
+
         let total_changes = total_additions + total_deletions;
         if total_changes > preview_lines {
-            println!("  {}... and {} more changes{}", YELLOW, total_changes - shown_lines, RESET);
+            println!(
+                "  {}... and {} more changes{}",
+                YELLOW,
+                total_changes - shown_lines,
+                RESET
+            );
         }
-        
     }
 
     pub async fn analyze_commands(
@@ -274,24 +280,31 @@ impl GeminiClient {
         } else {
             String::new()
         };
-        
+
         let prompt = if file_exists {
-            // Edit existing file
             format!(
-                "You are a helpful file editor. I need you to edit the following file based on my instructions.\n\n\
-                File path: {}\n\n\
-                Current file content:\n\
-                ```\n{}\n```\n\n\
-                Instructions: {}\n\n\
+                "You are a helpful file editor. I need you to edit the following file based on my instructions.
+
+                File path: {}
+
+                Current file content:
+                ```
+                {}
+                ```
+
+                Instructions: {}
+
                 Please provide the complete updated file content. Only output the file content, no explanations or markdown formatting.",
                 file_path, original_content, context
             )
         } else {
-            // Create new file
             format!(
-                "You are a helpful file creator. I need you to create a new file based on my instructions.\n\n\
-                File path: {}\n\n\
-                Instructions: {}\n\n\
+                "You are a helpful file creator. I need you to create a new file based on my instructions.
+
+                File path: {}
+
+                Instructions: {}
+
                 Please provide the complete file content that should be written to this file. Only output the file content, no explanations or markdown formatting.",
                 file_path, context
             )
@@ -335,7 +348,6 @@ impl GeminiClient {
             .map(|p| p.text)
             .ok_or_else(|| "No response from Gemini".to_string())?;
 
-        // Clean up the response - remove code block markers if present
         let cleaned_content = file_content
             .trim()
             .strip_prefix("```")
@@ -344,7 +356,6 @@ impl GeminiClient {
             .unwrap_or(&file_content)
             .trim();
 
-        // Show diff if file exists and content changed
         if file_exists && original_content.trim() != cleaned_content.trim() {
             self.display_diff(&original_content, cleaned_content, file_path);
         } else if !file_exists {
@@ -354,13 +365,11 @@ impl GeminiClient {
             return Ok(());
         }
 
-        // Create parent directories if they don't exist
         if let Some(parent) = std::path::Path::new(file_path).parent() {
             std::fs::create_dir_all(parent)
                 .map_err(|e| format!("Failed to create parent directories: {}", e))?;
         }
 
-        // Write the file
         std::fs::write(file_path, cleaned_content)
             .map_err(|e| format!("Failed to write file: {}", e))?;
 
@@ -369,7 +378,9 @@ impl GeminiClient {
 
     pub async fn query_gemini(&self, query: &str) -> Result<String, String> {
         let prompt = format!(
-            "You are a helpful assistant. Please answer the following query:\n\n{}",
+            "You are a helpful assistant. Please answer the following query:
+
+{}",
             query
         );
 
@@ -482,14 +493,14 @@ impl GeminiClient {
             "r" => "R",
             "matlab" | "m" => "MATLAB",
             "sh" | "bash" | "shell" => "Bourne Again Shell (bash)",
-            "zsh" => "Bourne Again Shell (bash)", // fallback to bash
+            "zsh" => "Bourne Again Shell (bash)",
             "fish" => "fish",
             "ps1" | "powershell" => "PowerShell",
             "bat" | "batch" => "Batch File",
             "html" | "htm" => "HTML",
             "css" => "CSS",
             "scss" | "sass" => "Sass",
-            "less" => "CSS", // fallback to CSS
+            "less" => "CSS",
             "xml" => "XML",
             "json" => "JSON",
             "yaml" | "yml" => "YAML",
@@ -656,8 +667,7 @@ impl GeminiClient {
 
     fn format_prompt(&self, commands: &[CommandEntry]) -> String {
         let mut prompt = String::from(
-            "You are a helpful shell command assistant. The user has provided a history of their last few commands. \
-            Use the full history for context, but focus your analysis and suggestions *only* on the most recent command.\n\n"
+            "You are a helpful shell command assistant. The user has provided a history of their last few commands. Use the full history for context, but focus your analysis and suggestions *only* on the most recent command.\n\n"
         );
 
         if let Some((last_command, context_commands)) = commands.split_last() {
@@ -695,3 +705,4 @@ impl GeminiClient {
         prompt
     }
 }
+

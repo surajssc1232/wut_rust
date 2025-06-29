@@ -170,7 +170,6 @@ async fn main() {
                 let file_path = &first_arg[1..];
                 
                 if write_mode {
-                    // Write/edit mode: huh -w @file context
                     if query_vec.len() > 1 {
                         let context = query_vec[1..].join(" ");
                         handle_write_command(file_path.to_string(), context, api_key, model).await;
@@ -178,7 +177,6 @@ async fn main() {
                         eprintln!("Error: Write mode requires context. Usage: huh -w @<file> <context>");
                     }
                 } else {
-                    // Query mode: huh @file context (existing behavior)
                     match fs::read_to_string(file_path) {
                         Ok(file_content) => {
                             let mut query =

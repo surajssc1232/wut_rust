@@ -128,7 +128,7 @@ async fn main() {
                 .long("model")
                 .short('m')
                 .value_name("MODEL")
-                .default_value("gemini-2.0-flash")
+                .default_value("gemini-2.5-flash-lite-preview-06-17")
                 .help("Gemini model to use"),
         )
         .arg(
@@ -157,7 +157,7 @@ async fn main() {
     let model = matches
         .get_one::<String>("model")
         .cloned()
-        .unwrap_or_else(|| "gemini-2.0-flash".to_string());
+        .unwrap_or_else(|| "gemini-2.5-flash-lite-preview-06-17".to_string());
 
     let write_mode = matches.get_flag("write");
 

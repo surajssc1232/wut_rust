@@ -111,25 +111,6 @@ async fn handle_query_command(query: String, api_key: String, model: String) {
     }
 }
 
-fn handle_display_command(files: Vec<&str>) {
-    let client = GeminiClient::new(String::new(), String::new()); // We don't need API key for display
-    
-    let file_count = files.len();
-    for file_path in &files {
-        match client.display_code_file(file_path) {
-            Ok(_) => {
-                // Success - file was displayed
-                if file_count > 1 {
-                    println!(); // Add spacing between multiple files
-                }
-            }
-            Err(e) => {
-                eprintln!("Error displaying {}: {}", file_path, e);
-            }
-        }
-    }
-}
-
 #[tokio::main]
 async fn main() {
     let matches = Command::new("huh")
@@ -158,13 +139,6 @@ async fn main() {
                 .help("Write/edit mode - use with @<file> <context>"),
         )
         .arg(
-            Arg::new("display")
-                .long("display")
-                .short('d')
-                .action(clap::ArgAction::SetTrue)
-                .help("Display code files with syntax highlighting using bat"),
-        )
-        .arg(
             Arg::new("query")
                 .help("Query to send to Gemini")
                 .num_args(0..)
@@ -186,34 +160,31 @@ async fn main() {
         .unwrap_or_else(|| "gemini-2.5-flash-lite-preview-06-17".to_string());
 
     let write_mode = matches.get_flag("write");
-    let display_mode = matches.get_flag("display");
 
     if let Some(query_args) = matches.get_many::<String>("query") {
         let query_vec: Vec<&str> = query_args.map(|s| s.as_str()).collect();
 
         if !query_vec.is_empty() {
-            if display_mode {
-                // Display mode - show files with syntax highlighting
-                handle_display_command(query_vec);
-                return;
-            }
-            
             let first_arg = query_vec[0];
             if first_arg.starts_with('@') {
                 let file_path = &first_arg[1..];
-                
+
                 if write_mode {
                     if query_vec.len() > 1 {
                         let context = query_vec[1..].join(" ");
                         handle_write_command(file_path.to_string(), context, api_key, model).await;
                     } else {
-                        eprintln!("Error: Write mode requires context. Usage: huh -w @<file> <context>");
+                        eprintln!(
+                            "Error: Write mode requires context. Usage: huh -w @<file> <context>"
+                        );
                     }
                 } else {
                     match fs::read_to_string(file_path) {
                         Ok(file_content) => {
-                            let mut query =
-                                format!("Content from {}:\n---\n{}\n---\n", file_path, file_content);
+                            let mut query = format!(
+                                "Content from {}:\n---\n{}\n---\n",
+                                file_path, file_content
+                            );
                             if query_vec.len() > 1 {
                                 query.push_str(&query_vec[1..].join(" "));
                             }
@@ -233,18 +204,14 @@ async fn main() {
                 }
             }
         } else {
-            if display_mode {
-                eprintln!("Error: Display mode requires file paths. Usage: huh -d <file1> <file2> ...");
-            } else if write_mode {
+            if write_mode {
                 eprintln!("Error: Write mode requires arguments. Usage: huh -w @<file> <context>");
             } else {
                 handle_wut_command(api_key, model).await;
             }
         }
     } else {
-        if display_mode {
-            eprintln!("Error: Display mode requires file paths. Usage: huh -d <file1> <file2> ...");
-        } else if write_mode {
+        if write_mode {
             eprintln!("Error: Write mode requires arguments. Usage: huh -w @<file> <context>");
         } else {
             handle_wut_command(api_key, model).await;

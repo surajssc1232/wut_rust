@@ -1,5 +1,5 @@
+use crate::{prompt, shell};
 use serde::{Deserialize, Serialize};
-use crate::{shell, prompt};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CommandEntry {
@@ -46,8 +46,7 @@ impl HistoryManager {
                     }
                 }
                 end = prompt_pos;
-            }
-            else {
+            } else {
                 break;
             }
         }
@@ -55,7 +54,3 @@ impl HistoryManager {
         Ok(commands)
     }
 }
-
-
-
-

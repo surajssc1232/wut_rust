@@ -15,7 +15,10 @@ pub fn get_prompt(shell: &str) -> Result<String, String> {
         .map_err(|e| format!("Failed to execute command: {}", e))?;
 
     if !output.status.success() {
-        return Err(format!("Command failed with exit code: {:?}", output.status.code()));
+        return Err(format!(
+            "Command failed with exit code: {:?}",
+            output.status.code()
+        ));
     }
 
     let raw = String::from_utf8_lossy(&output.stdout);

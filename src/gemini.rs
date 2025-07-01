@@ -1,9 +1,7 @@
 use crate::history::CommandEntry;
-use bat::PrettyPrinter;
 use regex::Regex;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use similar::{ChangeTag, TextDiff};
 
 #[derive(Serialize)]
 struct GeminiRequest {
@@ -77,92 +75,6 @@ impl GeminiClient {
             client,
             api_key,
             model,
-        }
-    }
-
-    fn display_diff(&self, original: &str, new_content: &str, _file_path: &str) {
-        const RED: &str = "\x1b[31m";
-        const BLUE: &str = "\x1b[34m";
-        const YELLOW: &str = "\x1b[33m";
-        const RESET: &str = "\x1b[0m";
-        const BOLD: &str = "\x1b[1m";
-
-        let diff = TextDiff::from_lines(original, new_content);
-
-        let mut total_additions = 0;
-        let mut total_deletions = 0;
-
-        for op in diff.ops() {
-            for change in diff.iter_changes(op) {
-                match change.tag() {
-                    ChangeTag::Delete => total_deletions += 1,
-                    ChangeTag::Insert => total_additions += 1,
-                    ChangeTag::Equal => {}
-                }
-            }
-        }
-
-        println!(
-            "\n  {}{}{}{} additions (+), {}{}{}{} deletions (-)",
-            BLUE, BOLD, total_additions, RESET, RED, BOLD, total_deletions, RESET
-        );
-
-        let preview_lines = 5;
-        let mut shown_lines = 0;
-        let mut has_changes = false;
-
-        for op in diff.ops() {
-            if shown_lines >= preview_lines {
-                break;
-            }
-            for change in diff.iter_changes(op) {
-                if shown_lines >= preview_lines {
-                    break;
-                }
-                match change.tag() {
-                    ChangeTag::Delete => {
-                        if !has_changes {
-                            println!("\n{}Key changes:{}", BOLD, RESET);
-                            has_changes = true;
-                        }
-                        print!("  {}-{} ", RED, RESET);
-                        let line = change.value().trim_end();
-                        let truncated = if line.len() > 60 {
-                            format!("{}...", &line[..57])
-                        } else {
-                            line.to_string()
-                        };
-                        println!("{}{}{}", RED, truncated, RESET);
-                        shown_lines += 1;
-                    }
-                    ChangeTag::Insert => {
-                        if !has_changes {
-                            println!("\n{}Key changes:{}", BOLD, RESET);
-                            has_changes = true;
-                        }
-                        print!("  {}+{} ", BLUE, RESET);
-                        let line = change.value().trim_end();
-                        let truncated = if line.len() > 60 {
-                            format!("{}...", &line[..57])
-                        } else {
-                            line.to_string()
-                        };
-                        println!("{}{}{}", BLUE, truncated, RESET);
-                        shown_lines += 1;
-                    }
-                    ChangeTag::Equal => {}
-                }
-            }
-        }
-
-        let total_changes = total_additions + total_deletions;
-        if total_changes > preview_lines {
-            println!(
-                "  {}... and {} more changes{}",
-                YELLOW,
-                total_changes - shown_lines,
-                RESET
-            );
         }
     }
 
@@ -385,7 +297,7 @@ impl GeminiClient {
             .trim();
 
         if file_exists && original_content.trim() != cleaned_content.trim() {
-            self.display_diff(&original_content, cleaned_content, file_path);
+            println!("\n✓ Changes applied to {}", file_path);
         } else if !file_exists {
             println!("\n+ Creating new file: {}", file_path);
         } else {
@@ -402,43 +314,6 @@ impl GeminiClient {
             .map_err(|e| format!("Failed to write file: {}", e))?;
 
         Ok(())
-    }
-
-    pub fn display_code_file(&self, file_path: &str) -> Result<(), String> {
-        use std::path::Path;
-
-        // Check if file exists
-        if !Path::new(file_path).exists() {
-            return Err(format!("File not found: {}", file_path));
-        }
-
-        // Use bat to display the file with syntax highlighting
-        let result = PrettyPrinter::new()
-            .input_file(Path::new(file_path))
-            .colored_output(true)
-            .true_color(true)
-            .header(true)
-            .line_numbers(true)
-            .grid(true)
-            .rule(true)
-            .tab_width(Some(4))
-            .print();
-
-        match result {
-            Ok(_) => Ok(()),
-            Err(e) => {
-                // Fallback to plain text display if bat fails
-                let content = std::fs::read_to_string(file_path)
-                    .map_err(|e| format!("Failed to read file {}: {}", file_path, e))?;
-                println!("File: {}", file_path);
-                println!("{}", "=".repeat(50));
-                println!("{}", content);
-                Err(format!(
-                    "Warning: Syntax highlighting failed ({}), displayed as plain text",
-                    e
-                ))
-            }
-        }
     }
 
     pub async fn query_gemini(&self, query: &str) -> Result<String, String> {
@@ -534,7 +409,7 @@ impl GeminiClient {
     fn highlight_code_with_bat(&self, code: &str, language: &str) -> String {
         use std::io::Write;
         use std::process::{Command, Stdio};
-        
+
         // Map common language aliases to bat-supported languages
         let bat_language = match language.to_lowercase().as_str() {
             "js" => "javascript",
@@ -550,15 +425,16 @@ impl GeminiClient {
             "" | "text" | "txt" => "text",
             _ => language,
         };
-        
+
         // Use the external bat command for inline code highlighting
         // This ensures consistency with the bat crate used for file display
         let mut child = match Command::new("bat")
             .args(&[
                 "--style=plain",
-                "--color=always", 
-                "--language", bat_language,
-                "--theme=Monokai Extended"
+                "--color=always",
+                "--language",
+                bat_language,
+                "--theme=Monokai Extended",
             ])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -579,9 +455,9 @@ impl GeminiClient {
 
         // Get highlighted output
         match child.wait_with_output() {
-            Ok(output) if output.status.success() => {
-                String::from_utf8_lossy(&output.stdout).trim_end().to_string()
-            }
+            Ok(output) if output.status.success() => String::from_utf8_lossy(&output.stdout)
+                .trim_end()
+                .to_string(),
             _ => {
                 // Fallback to plain text if bat fails
                 code.to_string()

@@ -1,12 +1,9 @@
 use crate::history::CommandEntry;
+use bat::PrettyPrinter;
 use regex::Regex;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use similar::{ChangeTag, TextDiff};
-use syntect::easy::HighlightLines;
-use syntect::highlighting::ThemeSet;
-use syntect::parsing::SyntaxSet;
-use syntect::util::as_24_bit_terminal_escaped;
 
 #[derive(Serialize)]
 struct GeminiRequest {
@@ -60,15 +57,10 @@ pub struct GeminiClient {
     client: Client,
     api_key: String,
     model: String,
-    syntax_set: SyntaxSet,
-    theme_set: ThemeSet,
 }
 
 impl GeminiClient {
     pub fn new(api_key: String, model: String) -> Self {
-        let syntax_set = SyntaxSet::load_defaults_newlines();
-        let theme_set = ThemeSet::load_defaults();
-        
         // Configure client for speed and reliability
         let client = Client::builder()
             .timeout(std::time::Duration::from_secs(15))
@@ -80,13 +72,11 @@ impl GeminiClient {
             .http2_keep_alive_timeout(std::time::Duration::from_secs(10))
             .build()
             .unwrap();
-            
+
         Self {
             client,
             api_key,
             model,
-            syntax_set,
-            theme_set,
         }
     }
 
@@ -414,6 +404,43 @@ impl GeminiClient {
         Ok(())
     }
 
+    pub fn display_code_file(&self, file_path: &str) -> Result<(), String> {
+        use std::path::Path;
+
+        // Check if file exists
+        if !Path::new(file_path).exists() {
+            return Err(format!("File not found: {}", file_path));
+        }
+
+        // Use bat to display the file with syntax highlighting
+        let result = PrettyPrinter::new()
+            .input_file(Path::new(file_path))
+            .colored_output(true)
+            .true_color(true)
+            .header(true)
+            .line_numbers(true)
+            .grid(true)
+            .rule(true)
+            .tab_width(Some(4))
+            .print();
+
+        match result {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                // Fallback to plain text display if bat fails
+                let content = std::fs::read_to_string(file_path)
+                    .map_err(|e| format!("Failed to read file {}: {}", file_path, e))?;
+                println!("File: {}", file_path);
+                println!("{}", "=".repeat(50));
+                println!("{}", content);
+                Err(format!(
+                    "Warning: Syntax highlighting failed ({}), displayed as plain text",
+                    e
+                ))
+            }
+        }
+    }
+
     pub async fn query_gemini(&self, query: &str) -> Result<String, String> {
         let prompt = format!(
             "You are a helpful assistant. Please answer the following query:
@@ -504,85 +531,62 @@ impl GeminiClient {
         result
     }
 
-    fn find_syntax_for_language(&self, lang: &str) -> &syntect::parsing::SyntaxReference {
-        let lang_lower = lang.to_lowercase();
-
-        if let Some(syntax) = self.syntax_set.find_syntax_by_name(&lang_lower) {
-            return syntax;
-        }
-
-        if let Some(syntax) = self.syntax_set.find_syntax_by_extension(&lang_lower) {
-            return syntax;
-        }
-
-        let mapped_lang = match lang_lower.as_str() {
-            "js" | "javascript" | "node" => "JavaScript",
-            "ts" | "typescript" => "TypeScript",
-            "py" | "python" => "Python",
-            "rs" | "rust" => "Rust",
-            "go" | "golang" => "Go",
-            "cpp" | "c++" | "cxx" => "C++",
-            "c" => "C",
-            "java" => "Java",
-            "kt" | "kotlin" => "Kotlin",
-            "cs" | "csharp" | "c#" => "C#",
-            "rb" | "ruby" => "Ruby",
-            "php" => "PHP",
-            "swift" => "Swift",
-            "scala" => "Scala",
-            "clj" | "clojure" => "Clojure",
-            "hs" | "haskell" => "Haskell",
-            "lua" => "Lua",
-            "perl" | "pl" => "Perl",
-            "r" => "R",
-            "matlab" | "m" => "MATLAB",
-            "sh" | "bash" | "shell" => "Bourne Again Shell (bash)",
-            "zsh" => "Bourne Again Shell (bash)",
-            "fish" => "fish",
-            "ps1" | "powershell" => "PowerShell",
-            "bat" | "batch" => "Batch File",
-            "html" | "htm" => "HTML",
-            "css" => "CSS",
-            "scss" | "sass" => "Sass",
-            "less" => "CSS",
-            "xml" => "XML",
-            "json" => "JSON",
-            "yaml" | "yml" => "YAML",
-            "toml" => "TOML",
-            "ini" | "cfg" | "conf" => "INI",
-            "dockerfile" | "docker" => "Dockerfile",
-            "sql" => "SQL",
-            "md" | "markdown" => "Markdown",
-            "tex" | "latex" => "LaTeX",
-            "vim" => "VimL",
-            "make" | "makefile" => "Makefile",
-            "cmake" => "CMake",
-            "gradle" => "Gradle",
-            "dart" => "Dart",
-            "elm" => "Elm",
-            "erlang" | "erl" => "Erlang",
-            "elixir" | "ex" => "Elixir",
-            "fsharp" | "fs" | "f#" => "F#",
-            "ocaml" | "ml" => "OCaml",
-            "nim" => "Nim",
-            "crystal" | "cr" => "Crystal",
-            "d" => "D",
-            "zig" => "Zig",
-            "v" | "vlang" => "V",
-            "assembly" | "asm" => "Assembly x86_64",
-            "diff" | "patch" => "Diff",
-            "log" => "Log",
-            "text" | "txt" => "Plain Text",
-            _ => "",
+    fn highlight_code_with_bat(&self, code: &str, language: &str) -> String {
+        use std::io::Write;
+        use std::process::{Command, Stdio};
+        
+        // Map common language aliases to bat-supported languages
+        let bat_language = match language.to_lowercase().as_str() {
+            "js" => "javascript",
+            "ts" => "typescript",
+            "py" => "python",
+            "rb" => "ruby",
+            "sh" | "bash" | "zsh" => "bash",
+            "cpp" | "c++" => "cpp",
+            "cs" => "csharp",
+            "kt" => "kotlin",
+            "yml" => "yaml",
+            "md" => "markdown",
+            "" | "text" | "txt" => "text",
+            _ => language,
+        };
+        
+        // Use the external bat command for inline code highlighting
+        // This ensures consistency with the bat crate used for file display
+        let mut child = match Command::new("bat")
+            .args(&[
+                "--style=plain",
+                "--color=always", 
+                "--language", bat_language,
+                "--theme=Monokai Extended"
+            ])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+        {
+            Ok(child) => child,
+            Err(_) => {
+                // Fallback to plain text if bat command is not available
+                return code.to_string();
+            }
         };
 
-        if !mapped_lang.is_empty() {
-            if let Some(syntax) = self.syntax_set.find_syntax_by_name(mapped_lang) {
-                return syntax;
-            }
+        // Write code to stdin
+        if let Some(stdin) = child.stdin.as_mut() {
+            let _ = stdin.write_all(code.as_bytes());
         }
 
-        self.syntax_set.find_syntax_plain_text()
+        // Get highlighted output
+        match child.wait_with_output() {
+            Ok(output) if output.status.success() => {
+                String::from_utf8_lossy(&output.stdout).trim_end().to_string()
+            }
+            _ => {
+                // Fallback to plain text if bat fails
+                code.to_string()
+            }
+        }
     }
 
     fn convert_markdown_to_ansi(&self, text: &str) -> String {
@@ -610,24 +614,8 @@ impl GeminiClient {
                     code_block_content.clear();
 
                     if !code.trim().is_empty() {
-                        let syntax = self.find_syntax_for_language(&code_block_lang);
-                        let theme = &self.theme_set.themes["base16-ocean.dark"];
-
-                        let mut highlighter = HighlightLines::new(syntax, theme);
-                        let highlighted_code = code
-                            .lines()
-                            .map(|line| {
-                                let ranges: Vec<(syntect::highlighting::Style, &str)> = highlighter
-                                    .highlight_line(line, &self.syntax_set)
-                                    .unwrap_or_default();
-                                if ranges.is_empty() {
-                                    line.to_string()
-                                } else {
-                                    as_24_bit_terminal_escaped(&ranges[..], false)
-                                }
-                            })
-                            .collect::<Vec<String>>()
-                            .join("\n");
+                        let highlighted_code =
+                            self.highlight_code_with_bat(&code, &code_block_lang);
                         result_lines.push(highlighted_code);
                     }
                 } else {
@@ -710,9 +698,8 @@ impl GeminiClient {
     }
 
     fn format_prompt(&self, commands: &[CommandEntry]) -> String {
-        let mut prompt = String::from(
-            "Analyze the last shell command only. Be concise and direct.\n\n"
-        );
+        let mut prompt =
+            String::from("Analyze the last shell command only. Be concise and direct.\n\n");
 
         if let Some((last_command, context_commands)) = commands.split_last() {
             // Only include minimal context if needed
@@ -735,10 +722,9 @@ impl GeminiClient {
 2. Next steps (max 3 numbered items)
 3. If typo/error, suggest fix as: Did you mean: `correct_command`
 
-Be concise."
+Be concise.",
         );
 
         prompt
     }
 }
-

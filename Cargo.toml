@@ -20,5 +20,5 @@ tokio = { version = "1.0", features = ["full"] }
 reqwest = { version = "0.11", features = ["json"] }
 dirs = "5.0"
 strsim = "0.11.0"
-syntect = "5.0.0"
 similar = "2.2.1"
+bat = "0.24"

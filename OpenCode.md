@@ -15,6 +15,7 @@
 - **Query mode**: `huh "question here"`
 - **File query**: `huh @file.txt "what does this do?"`
 - **File write/edit**: `huh -w @file.rs "add error handling"`
+- **Display code files**: `huh -d file1.rs file2.py file3.js` (syntax highlighted display using bat)
 
 ## Code Style Guidelines
 - **Imports**: Group std, external crates, then local modules with blank lines between
@@ -27,3 +28,4 @@
 - **HTTP**: Use reqwest with proper error handling and JSON serialization
 - **Regex**: Compile once, reuse instances, use raw strings for patterns
 - **Terminal output**: Use ANSI escape codes directly, flush stdout after printing
+- **Code highlighting**: Uses `bat` for syntax highlighting in responses (requires bat installed)

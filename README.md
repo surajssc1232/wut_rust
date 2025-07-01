@@ -38,6 +38,8 @@ Before you begin, ensure you have the following installed on your system:
 
     It's recommended to add this line to your shell's configuration file (e.g., `.bashrc`, `.zshrc`, `config.fish`) to make it persistent.
 
+-   **Tmux:** Huh requires `tmux` to work properly. It is used to read your shell history and provide context-aware suggestions. Please ensure `tmux` is installed on your system.
+
 ## Installation
 
 To get a copy of Huh up and running on your local machine, follow these steps:

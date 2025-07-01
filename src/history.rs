@@ -45,13 +45,23 @@ impl HistoryManager {
                 }
 
                 if !block.is_empty() {
-                    let mut lines = block.lines();
-                    if let Some(command_line) = lines.next() {
-                        let command = command_line.trim().to_string();
-                        if !command.is_empty() {
-                            let output = lines.collect::<Vec<&str>>().join("\n").trim().to_string();
-                            commands.push(CommandEntry { command, output });
+                    let mut lines = block.lines().peekable();
+                    let mut command_lines = Vec::new();
+
+                    while let Some(line) = lines.peek() {
+                        let trimmed_line = line.trim();
+                        if trimmed_line.ends_with('\\') || trimmed_line.ends_with('|') {
+                            command_lines.push(lines.next().unwrap());
+                        } else {
+                            command_lines.push(lines.next().unwrap());
+                            break;
                         }
+                    }
+
+                    let command = command_lines.join("\n").trim().to_string();
+                    if !command.is_empty() {
+                        let output = lines.collect::<Vec<&str>>().join("\n").trim().to_string();
+                        commands.push(CommandEntry { command, output });
                     }
                 }
             } else {

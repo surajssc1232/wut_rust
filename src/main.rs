@@ -128,7 +128,7 @@ async fn main() {
                 .long("model")
                 .short('m')
                 .value_name("MODEL")
-                .default_value("gemini-2.0-flash")
+                .default_value("gemini-2.5-flash-lite-preview-06-17")
                 .help("Gemini model to use"),
         )
         .arg(
@@ -168,21 +168,25 @@ async fn main() {
             let first_arg = query_vec[0];
             if first_arg.starts_with('@') {
                 let file_path = &first_arg[1..];
-                
+
                 if write_mode {
                     // Write/edit mode: huh -w @file context
                     if query_vec.len() > 1 {
                         let context = query_vec[1..].join(" ");
                         handle_write_command(file_path.to_string(), context, api_key, model).await;
                     } else {
-                        eprintln!("Error: Write mode requires context. Usage: huh -w @<file> <context>");
+                        eprintln!(
+                            "Error: Write mode requires context. Usage: huh -w @<file> <context>"
+                        );
                     }
                 } else {
                     // Query mode: huh @file context (existing behavior)
                     match fs::read_to_string(file_path) {
                         Ok(file_content) => {
-                            let mut query =
-                                format!("Content from {}:\n---\n{}\n---\n", file_path, file_content);
+                            let mut query = format!(
+                                "Content from {}:\n---\n{}\n---\n",
+                                file_path, file_content
+                            );
                             if query_vec.len() > 1 {
                                 query.push_str(&query_vec[1..].join(" "));
                             }

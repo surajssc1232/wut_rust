@@ -660,10 +660,10 @@ impl GeminiClient {
             Use the full history for context, but focus your analysis and suggestions *only* on the most recent command.\n\n"
         );
 
-        if let Some((last_command, context_commands)) = commands.split_last() {
-            if !context_commands.is_empty() {
+        if let Some((latest_command, older_commands)) = commands.split_first() {
+            if !older_commands.is_empty() {
                 prompt.push_str("--- Context (previous commands) ---\n");
-                for cmd in context_commands {
+                for cmd in older_commands {
                     prompt.push_str(&format!(
                         "Command: {}\nOutput: {}\n\n",
                         cmd.command, cmd.output
@@ -675,7 +675,7 @@ impl GeminiClient {
             prompt.push_str("--- Command to Analyze ---\n");
             prompt.push_str(&format!(
                 "Command: {}\nOutput: {}\n\n",
-                last_command.command, last_command.output
+                latest_command.command, latest_command.output
             ));
         }
 

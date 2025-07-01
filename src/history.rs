@@ -27,27 +27,34 @@ impl HistoryManager {
 
         let mut commands = Vec::new();
         let mut end = pane_content.len();
+        let mut blocks_found = 0;
 
-        while commands.len() < count {
+        // We look for count + 1 blocks to account for skipping the `huh` command itself.
+        while blocks_found < count + 1 {
             if let Some(prompt_pos) = pane_content[..end].rfind(&cleaned_prompt) {
                 let block_start = prompt_pos + cleaned_prompt.len();
                 let block_end = end;
                 let block = &pane_content[block_start..block_end].trim();
 
+                end = prompt_pos;
+                blocks_found += 1;
+
+                // The first block found is the `huh` command itself, so we skip it.
+                if blocks_found == 1 {
+                    continue;
+                }
+
                 if !block.is_empty() {
                     let mut lines = block.lines();
                     if let Some(command_line) = lines.next() {
                         let command = command_line.trim().to_string();
-
-                        if command != "wut" && command != "huh" && !command.is_empty() {
+                        if !command.is_empty() {
                             let output = lines.collect::<Vec<&str>>().join("\n").trim().to_string();
                             commands.push(CommandEntry { command, output });
                         }
                     }
                 }
-                end = prompt_pos;
-            }
-            else {
+            } else {
                 break;
             }
         }

@@ -19,8 +19,8 @@ async fn loading_animation(mut rx: oneshot::Receiver<()>) {
     print!("\x1b[?25l");
     loop {
         select! {
-            _ = tokio::time::sleep(Duration::from_millis(20)) => {
-                print!("\r{} Analyzing...\x1b[K", frames[i % frames.len()]);
+            _ = tokio::time::sleep(Duration::from_millis(40)) => {
+                print!("\r{} Thinking...\x1b[K", frames[i % frames.len()]);
                 io::stdout().flush().unwrap();
                 i += 1;
             }
@@ -99,7 +99,7 @@ async fn handle_query_command(query: String, api_key: String, model: String) {
             for char_code in response_text.chars() {
                 print!("{}", char_code);
                 io::stdout().flush().unwrap();
-                tokio::time::sleep(Duration::from_millis(3)).await;
+                tokio::time::sleep(Duration::from_millis(1)).await;
             }
             println!();
         }

@@ -11,6 +11,19 @@ use syntect::util::as_24_bit_terminal_escaped;
 #[derive(Serialize)]
 struct GeminiRequest {
     contents: Vec<Content>,
+    #[serde(rename = "generationConfig")]
+    generation_config: GenerationConfig,
+}
+
+#[derive(Serialize)]
+struct GenerationConfig {
+    temperature: f32,
+    #[serde(rename = "maxOutputTokens")]
+    max_output_tokens: u32,
+    #[serde(rename = "topP")]
+    top_p: f32,
+    #[serde(rename = "topK")]
+    top_k: u32,
 }
 
 #[derive(Serialize)]
@@ -55,8 +68,21 @@ impl GeminiClient {
     pub fn new(api_key: String, model: String) -> Self {
         let syntax_set = SyntaxSet::load_defaults_newlines();
         let theme_set = ThemeSet::load_defaults();
+        
+        // Configure client for speed and reliability
+        let client = Client::builder()
+            .timeout(std::time::Duration::from_secs(15))
+            .connect_timeout(std::time::Duration::from_secs(5))
+            .pool_idle_timeout(std::time::Duration::from_secs(30))
+            .pool_max_idle_per_host(5)
+            .http2_adaptive_window(true)
+            .http2_keep_alive_interval(Some(std::time::Duration::from_secs(30)))
+            .http2_keep_alive_timeout(std::time::Duration::from_secs(10))
+            .build()
+            .unwrap();
+            
         Self {
-            client: Client::new(),
+            client,
             api_key,
             model,
             syntax_set,
@@ -160,6 +186,12 @@ impl GeminiClient {
             contents: vec![Content {
                 parts: vec![Part { text: prompt }],
             }],
+            generation_config: GenerationConfig {
+                temperature: 0.1,
+                max_output_tokens: 512,
+                top_p: 0.8,
+                top_k: 10,
+            },
         };
 
         let url = format!(
@@ -314,6 +346,12 @@ impl GeminiClient {
             contents: vec![Content {
                 parts: vec![Part { text: prompt }],
             }],
+            generation_config: GenerationConfig {
+                temperature: 0.2,
+                max_output_tokens: 2048,
+                top_p: 0.9,
+                top_k: 20,
+            },
         };
 
         let url = format!(
@@ -388,6 +426,12 @@ impl GeminiClient {
             contents: vec![Content {
                 parts: vec![Part { text: prompt }],
             }],
+            generation_config: GenerationConfig {
+                temperature: 0.3,
+                max_output_tokens: 1024,
+                top_p: 0.9,
+                top_k: 20,
+            },
         };
 
         let url = format!(
@@ -667,22 +711,18 @@ impl GeminiClient {
 
     fn format_prompt(&self, commands: &[CommandEntry]) -> String {
         let mut prompt = String::from(
-            "You are a helpful shell command assistant. The user has provided a history of their last few commands. Use the full history for context, but focus your analysis and suggestions *only* on the most recent command.\n\n"
+            "Analyze the last shell command only. Be concise and direct.\n\n"
         );
 
         if let Some((last_command, context_commands)) = commands.split_last() {
-            if !context_commands.is_empty() {
-                prompt.push_str("--- Context (previous commands) ---\n");
-                for cmd in context_commands {
-                    prompt.push_str(&format!(
-                        "Command: {}\nOutput: {}\n\n",
-                        cmd.command, cmd.output
-                    ));
+            // Only include minimal context if needed
+            if !context_commands.is_empty() && context_commands.len() <= 1 {
+                prompt.push_str("Previous: ");
+                if let Some(prev) = context_commands.last() {
+                    prompt.push_str(&format!("{}\n", prev.command));
                 }
-                prompt.push_str("\n");
             }
 
-            prompt.push_str("--- Command to Analyze ---\n");
             prompt.push_str(&format!(
                 "Command: {}\nOutput: {}\n\n",
                 last_command.command, last_command.output
@@ -690,16 +730,12 @@ impl GeminiClient {
         }
 
         prompt.push_str(
-            "Please provide the following for the last command only:
+            "Provide:
+1. Brief analysis (1-2 sentences)
+2. Next steps (max 3 numbered items)
+3. If typo/error, suggest fix as: Did you mean: `correct_command`
 
-            A brief analysis of the command and its output.
-
-            Any relevant information or next steps, preferably in a numbered list format.
-
-            If the command appears to be a typo or incorrect, provide a suggestion in a new section titled 'Did you mean:' in the format: `suggested_command`
-
-
-            Keep your response concise and directly focused on the last command."
+Be concise."
         );
 
         prompt

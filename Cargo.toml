@@ -1,6 +1,6 @@
 [package]
 name = "huh"
-version = "0.2.10"
+version = "0.2.11"
 edition = "2021"
 description = "A CLI tool that provides AI-powered analysis and suggestions for your shell commands."
 license = "MIT"

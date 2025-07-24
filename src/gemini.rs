@@ -12,6 +12,8 @@ use syntect::util::as_24_bit_terminal_escaped;
 #[derive(Serialize)]
 struct GeminiRequest {
     contents: Vec<Content>,
+    #[serde(rename = "generationConfig")]
+    generation_config: GenerationConfig,
 }
 
 #[derive(Serialize)]
@@ -22,6 +24,13 @@ struct Content {
 #[derive(Serialize)]
 struct Part {
     text: String,
+}
+
+#[derive(Serialize)]
+struct GenerationConfig {
+    temperature: f32,
+    #[serde(rename = "maxOutputTokens")]
+    max_output_tokens: u32,
 }
 
 #[derive(Deserialize)]
@@ -157,6 +166,10 @@ impl GeminiClient {
             contents: vec![Content {
                 parts: vec![Part { text: prompt }],
             }],
+            generation_config: GenerationConfig {
+                temperature: self.config.temperature,
+                max_output_tokens: self.config.max_output_tokens,
+            },
         };
 
         let url = format!(
@@ -304,6 +317,10 @@ impl GeminiClient {
             contents: vec![Content {
                 parts: vec![Part { text: prompt }],
             }],
+            generation_config: GenerationConfig {
+                temperature: self.config.temperature,
+                max_output_tokens: self.config.max_output_tokens,
+            },
         };
 
         let url = format!(
@@ -385,6 +402,10 @@ Please answer the following query:
             contents: vec![Content {
                 parts: vec![Part { text: prompt }],
             }],
+            generation_config: GenerationConfig {
+                temperature: self.config.temperature,
+                max_output_tokens: self.config.max_output_tokens,
+            },
         };
 
         let url = format!(

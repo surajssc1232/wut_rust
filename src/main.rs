@@ -184,6 +184,12 @@ async fn main() {
         println!("Current configuration:");
         println!("  Default model: {}", config.default_model);
         println!("  Response length: {}", config.response_length);
+        println!("  Temperature: {}", config.temperature);
+        println!("  Max output tokens: {}", config.max_output_tokens);
+        println!("  Show thinking: {}", config.show_thinking);
+        println!("  Auto-save history: {}", config.auto_save_history);
+        println!("  Default shell: {}", config.default_shell);
+        println!("  API timeout: {} seconds", config.api_timeout);
         return;
     }
 

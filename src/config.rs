@@ -8,6 +8,12 @@ use console::style;
 pub struct Config {
     pub default_model: String,
     pub response_length: String,
+    pub temperature: f32,
+    pub max_output_tokens: u32,
+    pub show_thinking: bool,
+    pub auto_save_history: bool,
+    pub default_shell: String,
+    pub api_timeout: u64,
 }
 
 impl Default for Config {
@@ -15,6 +21,12 @@ impl Default for Config {
         Config {
             default_model: "gemini-2.0-flash".to_string(),
             response_length: "balanced".to_string(),
+            temperature: 0.7,
+            max_output_tokens: 8192,
+            show_thinking: false,
+            auto_save_history: true,
+            default_shell: "bash".to_string(),
+            api_timeout: 30,
         }
     }
 }
@@ -63,8 +75,29 @@ impl ConfigManager {
         let config_content = fs::read_to_string(&self.config_path)
             .map_err(|e| format!("Failed to read config file: {}", e))?;
 
-        serde_json::from_str(&config_content)
-            .map_err(|e| format!("Failed to parse config file: {}", e))
+        // Try to parse as new format first
+        match serde_json::from_str::<Config>(&config_content) {
+            Ok(config) => Ok(config),
+            Err(_) => {
+                // If that fails, try to parse as old format and upgrade
+                let old_config: serde_json::Value = serde_json::from_str(&config_content)
+                    .map_err(|e| format!("Failed to parse config file: {}", e))?;
+                
+                let mut new_config = Config::default();
+                
+                // Migrate old values if they exist
+                if let Some(default_model) = old_config.get("default_model").and_then(|v| v.as_str()) {
+                    new_config.default_model = default_model.to_string();
+                }
+                if let Some(response_length) = old_config.get("response_length").and_then(|v| v.as_str()) {
+                    new_config.response_length = response_length.to_string();
+                }
+                
+                // Save the upgraded config
+                self.save_config(&new_config)?;
+                Ok(new_config)
+            }
+        }
     }
 
     pub fn save_config(&self, config: &Config) -> Result<(), String> {
@@ -85,6 +118,12 @@ impl ConfigManager {
         let options = vec![
             "Change Default Model",
             "Change Response Length",
+            "Change Temperature",
+            "Change Max Output Tokens",
+            "Toggle Thinking Process Display",
+            "Toggle Auto-Save History",
+            "Change Default Shell",
+            "Change API Timeout",
             "Show Current Configuration",
             "Exit"
         ];
@@ -98,15 +137,27 @@ impl ConfigManager {
         match selection {
             0 => self.change_model(),
             1 => self.change_response_length(),
-            2 => {
+            2 => self.change_temperature(),
+            3 => self.change_max_tokens(),
+            4 => self.toggle_thinking(),
+            5 => self.toggle_auto_save(),
+            6 => self.change_shell(),
+            7 => self.change_timeout(),
+            8 => {
                 println!();
                 println!("{}", style("Current Configuration:").bold().cyan());
                 println!("  Default model: {}", style(&current_config.default_model).cyan());
                 println!("  Response length: {}", style(&current_config.response_length).cyan());
+                println!("  Temperature: {}", style(&current_config.temperature.to_string()).cyan());
+                println!("  Max output tokens: {}", style(&current_config.max_output_tokens.to_string()).cyan());
+                println!("  Show thinking: {}", style(&current_config.show_thinking.to_string()).cyan());
+                println!("  Auto-save history: {}", style(&current_config.auto_save_history.to_string()).cyan());
+                println!("  Default shell: {}", style(&current_config.default_shell).cyan());
+                println!("  API timeout: {} seconds", style(&current_config.api_timeout.to_string()).cyan());
                 println!();
                 Ok(current_config)
             }
-            3 => {
+            9 => {
                 println!("Configuration unchanged.");
                 Ok(current_config)
             }
@@ -268,6 +319,253 @@ impl ConfigManager {
 
         let mut config = Config::default();
         config.default_model = selected_model;
+
+        self.save_config(&config)?;
+        Ok(config)
+    }
+
+    pub fn change_temperature(&self) -> Result<Config, String> {
+        println!("\\n{}", style("🔧 Change Temperature").bold().cyan());
+        println!("{}", style("Temperature controls creativity (0.0 = focused, 1.0 = creative):").dim());
+        println!();
+
+        let current_config = self.load_config()?;
+        let temp_options = vec![
+            (0.0, "0.0 - Very focused and deterministic"),
+            (0.3, "0.3 - Slightly focused"),
+            (0.5, "0.5 - Balanced"),
+            (0.7, "0.7 - Creative (recommended)"),
+            (0.9, "0.9 - Very creative"),
+            (1.0, "1.0 - Maximum creativity")
+        ];
+        
+        let option_names: Vec<&str> = temp_options.iter().map(|(_, name)| *name).collect();
+        let current_index = temp_options.iter()
+            .position(|(temp, _)| (*temp - current_config.temperature).abs() < 0.01)
+            .unwrap_or(3);
+
+        let selection = Select::with_theme(&ColorfulTheme::default())
+            .with_prompt("Select temperature setting")
+            .default(current_index)
+            .items(&option_names)
+            .interact()
+            .map_err(|e| format!("Failed to get user selection: {}", e))?;
+
+        let selected_temp = temp_options[selection].0;
+        
+        println!();
+        if (selected_temp - current_config.temperature).abs() < 0.01 {
+            println!("{} No change - keeping: {}", 
+                style("ℹ").blue().bold(), 
+                style(&selected_temp.to_string()).cyan().bold()
+            );
+        } else {
+            println!("{} Changed from {} to {}", 
+                style("✓").green().bold(),
+                style(&current_config.temperature.to_string()).dim(),
+                style(&selected_temp.to_string()).cyan().bold()
+            );
+        }
+        println!();
+
+        let mut config = current_config;
+        config.temperature = selected_temp;
+
+        self.save_config(&config)?;
+        Ok(config)
+    }
+
+    pub fn change_max_tokens(&self) -> Result<Config, String> {
+        println!("\\n{}", style("🔧 Change Max Output Tokens").bold().cyan());
+        println!("{}", style("Maximum number of tokens in AI responses:").dim());
+        println!();
+
+        let current_config = self.load_config()?;
+        let token_options = vec![
+            (1024, "1024 - Short responses"),
+            (2048, "2048 - Medium responses"),
+            (4096, "4096 - Long responses"),
+            (8192, "8192 - Very long responses (recommended)"),
+            (16384, "16384 - Maximum length responses")
+        ];
+        
+        let option_names: Vec<&str> = token_options.iter().map(|(_, name)| *name).collect();
+        let current_index = token_options.iter()
+            .position(|(tokens, _)| *tokens == current_config.max_output_tokens)
+            .unwrap_or(3);
+
+        let selection = Select::with_theme(&ColorfulTheme::default())
+            .with_prompt("Select max output tokens")
+            .default(current_index)
+            .items(&option_names)
+            .interact()
+            .map_err(|e| format!("Failed to get user selection: {}", e))?;
+
+        let selected_tokens = token_options[selection].0;
+        
+        println!();
+        if selected_tokens == current_config.max_output_tokens {
+            println!("{} No change - keeping: {}", 
+                style("ℹ").blue().bold(), 
+                style(&selected_tokens.to_string()).cyan().bold()
+            );
+        } else {
+            println!("{} Changed from {} to {}", 
+                style("✓").green().bold(),
+                style(&current_config.max_output_tokens.to_string()).dim(),
+                style(&selected_tokens.to_string()).cyan().bold()
+            );
+        }
+        println!();
+
+        let mut config = current_config;
+        config.max_output_tokens = selected_tokens;
+
+        self.save_config(&config)?;
+        Ok(config)
+    }
+
+    pub fn toggle_thinking(&self) -> Result<Config, String> {
+        println!("\\n{}", style("🔧 Toggle Thinking Process Display").bold().cyan());
+        println!("{}", style("Show AI reasoning and thought process:").dim());
+        println!();
+
+        let current_config = self.load_config()?;
+        let new_value = !current_config.show_thinking;
+        
+        println!("{} Changed from {} to {}", 
+            style("✓").green().bold(),
+            style(&current_config.show_thinking.to_string()).dim(),
+            style(&new_value.to_string()).cyan().bold()
+        );
+        println!();
+
+        let mut config = current_config;
+        config.show_thinking = new_value;
+
+        self.save_config(&config)?;
+        Ok(config)
+    }
+
+    pub fn toggle_auto_save(&self) -> Result<Config, String> {
+        println!("\\n{}", style("🔧 Toggle Auto-Save History").bold().cyan());
+        println!("{}", style("Automatically save conversation history:").dim());
+        println!();
+
+        let current_config = self.load_config()?;
+        let new_value = !current_config.auto_save_history;
+        
+        println!("{} Changed from {} to {}", 
+            style("✓").green().bold(),
+            style(&current_config.auto_save_history.to_string()).dim(),
+            style(&new_value.to_string()).cyan().bold()
+        );
+        println!();
+
+        let mut config = current_config;
+        config.auto_save_history = new_value;
+
+        self.save_config(&config)?;
+        Ok(config)
+    }
+
+    pub fn change_shell(&self) -> Result<Config, String> {
+        println!("\\n{}", style("🔧 Change Default Shell").bold().cyan());
+        println!("{}", style("Default shell for command execution:").dim());
+        println!();
+
+        let current_config = self.load_config()?;
+        let shell_options = vec![
+            ("bash", "Bash - Most common Unix shell"),
+            ("zsh", "Zsh - Feature-rich shell with plugins"),
+            ("fish", "Fish - User-friendly shell with syntax highlighting"),
+            ("sh", "Sh - POSIX-compliant shell"),
+            ("powershell", "PowerShell - Windows/cross-platform shell"),
+            ("cmd", "CMD - Windows command prompt")
+        ];
+        
+        let option_names: Vec<&str> = shell_options.iter().map(|(_, name)| *name).collect();
+        let current_index = shell_options.iter()
+            .position(|(shell, _)| *shell == current_config.default_shell)
+            .unwrap_or(0);
+
+        let selection = Select::with_theme(&ColorfulTheme::default())
+            .with_prompt("Select default shell")
+            .default(current_index)
+            .items(&option_names)
+            .interact()
+            .map_err(|e| format!("Failed to get user selection: {}", e))?;
+
+        let selected_shell = shell_options[selection].0.to_string();
+        
+        println!();
+        if selected_shell == current_config.default_shell {
+            println!("{} No change - keeping: {}", 
+                style("ℹ").blue().bold(), 
+                style(&selected_shell).cyan().bold()
+            );
+        } else {
+            println!("{} Changed from {} to {}", 
+                style("✓").green().bold(),
+                style(&current_config.default_shell).dim(),
+                style(&selected_shell).cyan().bold()
+            );
+        }
+        println!();
+
+        let mut config = current_config;
+        config.default_shell = selected_shell;
+
+        self.save_config(&config)?;
+        Ok(config)
+    }
+
+    pub fn change_timeout(&self) -> Result<Config, String> {
+        println!("\\n{}", style("🔧 Change API Timeout").bold().cyan());
+        println!("{}", style("Timeout for API requests in seconds:").dim());
+        println!();
+
+        let current_config = self.load_config()?;
+        let timeout_options = vec![
+            (10, "10 seconds - Quick timeout"),
+            (20, "20 seconds - Short timeout"),
+            (30, "30 seconds - Standard timeout (recommended)"),
+            (60, "60 seconds - Long timeout"),
+            (120, "120 seconds - Extended timeout"),
+            (300, "300 seconds - Maximum timeout")
+        ];
+        
+        let option_names: Vec<&str> = timeout_options.iter().map(|(_, name)| *name).collect();
+        let current_index = timeout_options.iter()
+            .position(|(timeout, _)| *timeout == current_config.api_timeout)
+            .unwrap_or(2);
+
+        let selection = Select::with_theme(&ColorfulTheme::default())
+            .with_prompt("Select API timeout")
+            .default(current_index)
+            .items(&option_names)
+            .interact()
+            .map_err(|e| format!("Failed to get user selection: {}", e))?;
+
+        let selected_timeout = timeout_options[selection].0;
+        
+        println!();
+        if selected_timeout == current_config.api_timeout {
+            println!("{} No change - keeping: {} seconds", 
+                style("ℹ").blue().bold(), 
+                style(&selected_timeout.to_string()).cyan().bold()
+            );
+        } else {
+            println!("{} Changed from {} to {} seconds", 
+                style("✓").green().bold(),
+                style(&current_config.api_timeout.to_string()).dim(),
+                style(&selected_timeout.to_string()).cyan().bold()
+            );
+        }
+        println!();
+
+        let mut config = current_config;
+        config.api_timeout = selected_timeout;
 
         self.save_config(&config)?;
         Ok(config)

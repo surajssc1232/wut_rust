@@ -177,6 +177,21 @@ async fn main() {
         config_manager.show_current_model().expect("Failed to show current model");
         return;
     }
+
+    // Handle --show-config flag
+    if matches.get_flag("show-config") {
+        let config = config_manager.load_config().expect("Failed to load configuration");
+        println!("Current configuration:");
+        println!("  Default model: {}", config.default_model);
+        println!("  Response length: {}", config.response_length);
+        return;
+    }
+
+    // Handle -c/--config flag
+    if matches.get_flag("config") {
+        config_manager.interactive_config_menu().expect("Failed to open configuration menu");
+        return;
+    }
     
     // Handle --model flag behavior
     if let Some(model_value) = matches.get_one::<String>("model") {

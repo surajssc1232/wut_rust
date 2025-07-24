@@ -75,8 +75,47 @@ impl ConfigManager {
             .map_err(|e| format!("Failed to write config file: {}", e))
     }
 
+    pub fn interactive_config_menu(&self) -> Result<Config, String> {
+        println!("\\n{}", style("🔧 Configuration Menu").bold().cyan());
+        println!("{}", style("Configure your huh settings:").dim());
+        println!();
+
+        let current_config = self.load_config()?;
+        
+        let options = vec![
+            "Change Default Model",
+            "Change Response Length",
+            "Show Current Configuration",
+            "Exit"
+        ];
+
+        let selection = Select::with_theme(&ColorfulTheme::default())
+            .with_prompt("What would you like to configure?")
+            .items(&options)
+            .interact()
+            .map_err(|e| format!("Failed to get user selection: {}", e))?;
+
+        match selection {
+            0 => self.change_model(),
+            1 => self.change_response_length(),
+            2 => {
+                println!();
+                println!("{}", style("Current Configuration:").bold().cyan());
+                println!("  Default model: {}", style(&current_config.default_model).cyan());
+                println!("  Response length: {}", style(&current_config.response_length).cyan());
+                println!();
+                Ok(current_config)
+            }
+            3 => {
+                println!("Configuration unchanged.");
+                Ok(current_config)
+            }
+            _ => Ok(current_config)
+        }
+    }
+
     pub fn change_model(&self) -> Result<Config, String> {
-        println!("\n{}", style("🔧 Change Default Model").bold().cyan());
+        println!("\\n{}", style("🔧 Change Default Model").bold().cyan());
         println!("{}", style("Select your new default Gemini model:").dim());
         println!();
 
@@ -120,6 +159,57 @@ impl ConfigManager {
         Ok(config)
     }
 
+    pub fn change_response_length(&self) -> Result<Config, String> {
+        println!("\\n{}", style("🔧 Change Response Length").bold().cyan());
+        println!("{}", style("Select your preferred response length:").dim());
+        println!();
+
+        let current_config = self.load_config()?;
+        let response_options = vec![
+            ("brief", "Brief - Concise, essential information only"),
+            ("balanced", "Balanced - Moderate detail with key information"),
+            ("detailed", "Detailed - Comprehensive explanations with context"),
+            ("verbose", "Verbose - Very thorough with examples and additional info")
+        ];
+        
+        let option_names: Vec<&str> = response_options.iter().map(|(_, name)| *name).collect();
+        
+        // Find current response length index for default selection
+        let current_index = response_options.iter()
+            .position(|(id, _)| *id == current_config.response_length)
+            .unwrap_or(1); // Default to "balanced"
+
+        let selection = Select::with_theme(&ColorfulTheme::default())
+            .with_prompt("Select your preferred response length")
+            .default(current_index)
+            .items(&option_names)
+            .interact()
+            .map_err(|e| format!("Failed to get user selection: {}", e))?;
+
+        let selected_length = response_options[selection].0.to_string();
+        
+        println!();
+        if selected_length == current_config.response_length {
+            println!("{} No change - keeping: {}", 
+                style("ℹ").blue().bold(), 
+                style(&selected_length).cyan().bold()
+            );
+        } else {
+            println!("{} Changed from {} to {}", 
+                style("✓").green().bold(),
+                style(&current_config.response_length).dim(),
+                style(&selected_length).cyan().bold()
+            );
+        }
+        println!();
+
+        let mut config = current_config;
+        config.response_length = selected_length;
+
+        self.save_config(&config)?;
+        Ok(config)
+    }
+
     pub fn set_model(&self, model: &str) -> Result<Config, String> {
         // Validate that the model is in our list
         let models = get_available_models();
@@ -152,7 +242,7 @@ impl ConfigManager {
     }
 
     pub fn run_first_time_setup(&self) -> Result<Config, String> {
-        println!("\n{}", style("🚀 Welcome to huh!").bold().cyan());
+        println!("\\n{}", style("🚀 Welcome to huh!").bold().cyan());
         println!("{}", style("Let's set up your default Gemini model.").dim());
         println!();
 

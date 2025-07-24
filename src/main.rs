@@ -1,9 +1,11 @@
+mod config;
 mod gemini;
 mod history;
 mod prompt;
 mod shell;
 
 use clap::{Arg, Command};
+use config::ConfigManager;
 use gemini::GeminiClient;
 use history::HistoryManager;
 use std::env;
@@ -128,8 +130,16 @@ async fn main() {
                 .long("model")
                 .short('m')
                 .value_name("MODEL")
-                .default_value("gemini-2.5-flash-lite-preview-06-17")
-                .help("Gemini model to use"),
+                .num_args(0..=1)
+                .default_missing_value("")
+                .help("Set default model (persistent) or show model selection menu if no value given"),
+        )
+        .arg(
+            Arg::new("model-now")
+                .long("model-now")
+                .short('n')
+                .action(clap::ArgAction::SetTrue)
+                .help("Show currently configured default model"),
         )
         .arg(
             Arg::new("write")
@@ -146,6 +156,34 @@ async fn main() {
         )
         .get_matches();
 
+    // Initialize config manager
+    let config_manager = ConfigManager::new().expect("Failed to initialize config manager");
+    
+    // Handle --model-now flag
+    if matches.get_flag("model-now") {
+        config_manager.show_current_model().expect("Failed to show current model");
+        return;
+    }
+    
+    // Handle --model flag behavior
+    if let Some(model_value) = matches.get_one::<String>("model") {
+        if model_value.is_empty() {
+            // --model without value: show interactive menu
+            config_manager.change_model().expect("Failed to change model");
+            return;
+        } else {
+            // --model with value: set as new default
+            match config_manager.set_model(model_value) {
+                Ok(_) => return,
+                Err(e) => {
+                    eprintln!("Error: {}", e);
+                    std::process::exit(1);
+                }
+            }
+        }
+    }
+    
+    // For regular operation, we need an API key
     let api_key = matches
         .get_one::<String>("api-key")
         .cloned()
@@ -153,11 +191,18 @@ async fn main() {
         .expect(
             "API key must be provided via --api-key flag or GEMINI_API_KEY environment variable",
         );
+    
+    // Check if this is the first run and run setup if needed
+    let config = if !config_manager.config_exists() {
+        config_manager.run_first_time_setup()
+            .expect("Failed to run first-time setup")
+    } else {
+        config_manager.load_config()
+            .expect("Failed to load configuration")
+    };
 
-    let model = matches
-        .get_one::<String>("model")
-        .cloned()
-        .unwrap_or_else(|| "gemini-2.0-flash".to_string());
+    // Use the configured default model
+    let model = config.default_model.clone();
 
     let write_mode = matches.get_flag("write");
 

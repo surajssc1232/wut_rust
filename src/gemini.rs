@@ -1,3 +1,4 @@
+use crate::config::Config;
 use crate::history::CommandEntry;
 use regex::Regex;
 use reqwest::Client;
@@ -49,10 +50,11 @@ pub struct GeminiClient {
     model: String,
     syntax_set: SyntaxSet,
     theme_set: ThemeSet,
+    config: Config,
 }
 
 impl GeminiClient {
-    pub fn new(api_key: String, model: String) -> Self {
+    pub fn new(api_key: String, model: String, config: &Config) -> Self {
         let syntax_set = SyntaxSet::load_defaults_newlines();
         let theme_set = ThemeSet::load_defaults();
         Self {
@@ -61,6 +63,7 @@ impl GeminiClient {
             model,
             syntax_set,
             theme_set,
+            config: config.clone(),
         }
     }
 
@@ -369,7 +372,12 @@ impl GeminiClient {
 
     pub async fn query_gemini(&self, query: &str) -> Result<String, String> {
         let prompt = format!(
-            "You are a helpful assistant. Please answer the following query:\n\n{}",
+            "You are a helpful assistant. {}
+
+Please answer the following query:
+
+{}",
+            self.config.get_response_length_instruction(),
             query
         );
 
@@ -679,7 +687,7 @@ impl GeminiClient {
             ));
         }
 
-        prompt.push_str(
+        prompt.push_str(&format!(
             "Please provide the following for the last command only:
 
             A brief analysis of the command and its output.
@@ -688,9 +696,11 @@ impl GeminiClient {
 
             If the command appears to be a typo or incorrect, provide a suggestion in a new section titled 'Did you mean:' in the format: `suggested_command`
 
+            {}
 
-            Keep your response concise and directly focused on the last command."
-        );
+            Keep your response focused on the last command.",
+            self.config.get_response_length_instruction()
+        ));
 
         prompt
     }

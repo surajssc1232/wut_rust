@@ -7,12 +7,26 @@ use console::style;
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Config {
     pub default_model: String,
+    pub response_length: String,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Config {
             default_model: "gemini-2.0-flash".to_string(),
+            response_length: "balanced".to_string(),
+        }
+    }
+}
+
+impl Config {
+    pub fn get_response_length_instruction(&self) -> &str {
+        match self.response_length.as_str() {
+            "brief" => "Keep your response brief and concise. Provide only the essential information without elaborate explanations.",
+            "balanced" => "Provide a balanced response with moderate detail. Include key information and brief explanations.",
+            "detailed" => "Provide a detailed response with comprehensive explanations. Include relevant context and examples where helpful.",
+            "verbose" => "Provide a very detailed and thorough response. Include comprehensive explanations, examples, context, and additional relevant information.",
+            _ => "Provide a balanced response with moderate detail."
         }
     }
 }
@@ -99,9 +113,8 @@ impl ConfigManager {
         }
         println!();
 
-        let config = Config {
-            default_model: selected_model,
-        };
+        let mut config = current_config;
+        config.default_model = selected_model;
 
         self.save_config(&config)?;
         Ok(config)
@@ -116,9 +129,8 @@ impl ConfigManager {
             return Err(format!("Invalid model '{}'. Use --model without a value to see available models.", model));
         }
 
-        let config = Config {
-            default_model: model.to_string(),
-        };
+        let mut config = self.load_config()?;
+        config.default_model = model.to_string();
 
         self.save_config(&config)?;
         
@@ -164,9 +176,8 @@ impl ConfigManager {
         println!("{}", style("You can change this anytime with the --model flag.").dim());
         println!();
 
-        let config = Config {
-            default_model: selected_model,
-        };
+        let mut config = Config::default();
+        config.default_model = selected_model;
 
         self.save_config(&config)?;
         Ok(config)

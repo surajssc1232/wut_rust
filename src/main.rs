@@ -36,7 +36,7 @@ async fn loading_animation(mut rx: oneshot::Receiver<()>) {
     io::stdout().flush().unwrap();
 }
 
-async fn handle_wut_command(api_key: String, model: String) {
+async fn handle_wut_command(api_key: String, model: String, config: &config::Config) {
     let history_manager = HistoryManager::new().unwrap();
     let commands = history_manager.get_last_commands(2).unwrap();
 
@@ -45,7 +45,7 @@ async fn handle_wut_command(api_key: String, model: String) {
         return;
     }
 
-    let client = GeminiClient::new(api_key, model);
+    let client = GeminiClient::new(api_key, model, config);
 
     let (tx, rx) = oneshot::channel();
     let animation_handle = tokio::spawn(loading_animation(rx));
@@ -67,8 +67,8 @@ async fn handle_wut_command(api_key: String, model: String) {
     }
 }
 
-async fn handle_write_command(file_path: String, context: String, api_key: String, model: String) {
-    let client = GeminiClient::new(api_key, model);
+async fn handle_write_command(file_path: String, context: String, api_key: String, model: String, config: &config::Config) {
+    let client = GeminiClient::new(api_key, model, config);
 
     let (tx, rx) = oneshot::channel();
     let animation_handle = tokio::spawn(loading_animation(rx));
@@ -87,8 +87,8 @@ async fn handle_write_command(file_path: String, context: String, api_key: Strin
     }
 }
 
-async fn handle_query_command(query: String, api_key: String, model: String) {
-    let client = GeminiClient::new(api_key, model);
+async fn handle_query_command(query: String, api_key: String, model: String, config: &config::Config) {
+    let client = GeminiClient::new(api_key, model, config);
 
     let (tx, rx) = oneshot::channel();
     let animation_handle = tokio::spawn(loading_animation(rx));
@@ -140,6 +140,19 @@ async fn main() {
                 .short('n')
                 .action(clap::ArgAction::SetTrue)
                 .help("Show currently configured default model"),
+        )
+        .arg(
+            Arg::new("config")
+                .long("config")
+                .short('c')
+                .action(clap::ArgAction::SetTrue)
+                .help("Open interactive configuration menu"),
+        )
+        .arg(
+            Arg::new("show-config")
+                .long("show-config")
+                .action(clap::ArgAction::SetTrue)
+                .help("Show current configuration"),
         )
         .arg(
             Arg::new("write")
@@ -218,7 +231,7 @@ async fn main() {
                     // Write/edit mode: huh -w @file context
                     if query_vec.len() > 1 {
                         let context = query_vec[1..].join(" ");
-                        handle_write_command(file_path.to_string(), context, api_key, model).await;
+                        handle_write_command(file_path.to_string(), context, api_key, model, &config).await;
                     } else {
                         eprintln!(
                             "Error: Write mode requires context. Usage: huh -w @<file> <context>"
@@ -235,7 +248,7 @@ async fn main() {
                             if query_vec.len() > 1 {
                                 query.push_str(&query_vec[1..].join(" "));
                             }
-                            handle_query_command(query, api_key, model).await;
+                            handle_query_command(query, api_key, model, &config).await;
                         }
                         Err(e) => {
                             eprintln!("Error reading file {}: {}", file_path, e);
@@ -247,21 +260,21 @@ async fn main() {
                     eprintln!("Error: Write mode requires a file path starting with @. Usage: huh -w @<file> <context>");
                 } else {
                     let query = query_vec.join(" ");
-                    handle_query_command(query, api_key, model).await;
+                    handle_query_command(query, api_key, model, &config).await;
                 }
             }
         } else {
             if write_mode {
                 eprintln!("Error: Write mode requires arguments. Usage: huh -w @<file> <context>");
             } else {
-                handle_wut_command(api_key, model).await;
+                handle_wut_command(api_key, model, &config).await;
             }
         }
     } else {
         if write_mode {
             eprintln!("Error: Write mode requires arguments. Usage: huh -w @<file> <context>");
         } else {
-            handle_wut_command(api_key, model).await;
+            handle_wut_command(api_key, model, &config).await;
         }
     }
 }

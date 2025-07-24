@@ -1,0 +1,553 @@
+use std::fs;
+use std::path::PathBuf;
+use serde::{Deserialize, Serialize};
+use dialoguer::{Select, theme::ColorfulTheme};
+use console::style;
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct Config {
+    pub default_model: String,
+    pub scrollback_buffer_size: usize,
+    pub enable_loading_animation: bool,
+    pub typing_animation_speed_ms: u64,
+    pub max_line_width: usize,
+    pub show_command_context: bool,
+    pub context_commands_count: usize,
+    pub api_timeout_seconds: u64,
+    pub auto_save_history: bool,
+    pub theme: String,
+    pub show_model_in_prompt: bool,
+    pub verbose_output: bool,
+    pub response_length: String,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Config {
+            default_model: "gemini-2.0-flash".to_string(),
+            scrollback_buffer_size: 2,
+            enable_loading_animation: true,
+            typing_animation_speed_ms: 3,
+            max_line_width: 100,
+            show_command_context: true,
+            context_commands_count: 2,
+            api_timeout_seconds: 30,
+            auto_save_history: true,
+            theme: "dark".to_string(),
+            show_model_in_prompt: false,
+            verbose_output: false,
+            response_length: "balanced".to_string(),
+        }
+    }
+}
+
+impl Config {
+    pub fn get_response_length_instruction(&self) -> &str {
+        match self.response_length.as_str() {
+            "brief" => "Keep your response brief and concise. Provide only the essential information without elaborate explanations.",
+            "balanced" => "Provide a balanced response with moderate detail. Include key information and brief explanations.",
+            "detailed" => "Provide a detailed response with comprehensive explanations. Include relevant context and examples where helpful.",
+            "verbose" => "Provide a very detailed and thorough response. Include comprehensive explanations, examples, context, and additional relevant information.",
+            _ => "Provide a balanced response with moderate detail."
+        }
+    }
+}
+
+pub struct ConfigManager {
+    config_path: PathBuf,
+}
+
+impl ConfigManager {
+    pub fn new() -> Result<Self, String> {
+        let config_dir = dirs::config_dir()
+            .ok_or("Unable to determine config directory")?
+            .join("huh");
+        
+        if !config_dir.exists() {
+            fs::create_dir_all(&config_dir)
+                .map_err(|e| format!("Failed to create config directory: {}", e))?;
+        }
+
+        let config_path = config_dir.join("config.json");
+        
+        Ok(ConfigManager { config_path })
+    }
+
+    pub fn config_exists(&self) -> bool {
+        self.config_path.exists()
+    }
+
+    pub fn load_config(&self) -> Result<Config, String> {
+        if !self.config_exists() {
+            return Ok(Config::default());
+        }
+
+        let config_content = fs::read_to_string(&self.config_path)
+            .map_err(|e| format!("Failed to read config file {}: {}", 
+                self.config_path.display(), e))?;
+
+        serde_json::from_str(&config_content)
+            .map_err(|e| format!("Failed to parse config file {}: {}", 
+                self.config_path.display(), e))
+    }
+
+    pub fn save_config(&self, config: &Config) -> Result<(), String> {
+        let config_json = serde_json::to_string_pretty(config)
+            .map_err(|e| format!("Failed to serialize config: {}", e))?;
+
+        fs::write(&self.config_path, config_json)
+            .map_err(|e| format!("Failed to write config file to {}: {}", 
+                self.config_path.display(), e))
+    }
+
+    pub fn show_current_config(&self) -> Result<(), String> {
+        let config = self.load_config()?;
+        println!("\n{}", style("📋 Current Configuration").bold().cyan());
+        println!("{}━{}", style("  ").dim(), style("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━").dim());
+        
+        println!("  {} {}", style("Model:").bold(), style(&config.default_model).cyan());
+        println!("  {} {}", style("Scrollback buffer:").bold(), style(format!("{} commands", config.scrollback_buffer_size)).cyan());
+        println!("  {} {}", style("Loading animation:").bold(), 
+            if config.enable_loading_animation { style("enabled").green() } else { style("disabled").red() });
+        println!("  {} {}ms", style("Typing speed:").bold(), style(config.typing_animation_speed_ms).cyan());
+        println!("  {} {} chars", style("Max line width:").bold(), style(config.max_line_width).cyan());
+        println!("  {} {}", style("Command context:").bold(), 
+            if config.show_command_context { style("enabled").green() } else { style("disabled").red() });
+        println!("  {} {}", style("Context commands:").bold(), style(config.context_commands_count).cyan());
+        println!("  {} {}s", style("API timeout:").bold(), style(config.api_timeout_seconds).cyan());
+        println!("  {} {}", style("Auto-save history:").bold(), 
+            if config.auto_save_history { style("enabled").green() } else { style("disabled").red() });
+        println!("  {} {}", style("Theme:").bold(), style(&config.theme).cyan());
+        println!("  {} {}", style("Show model in prompt:").bold(), 
+            if config.show_model_in_prompt { style("enabled").green() } else { style("disabled").red() });
+        println!("  {} {}", style("Verbose output:").bold(), 
+            if config.verbose_output { style("enabled").green() } else { style("disabled").red() });
+        println!("  {} {}", style("Response length:").bold(), style(&config.response_length).cyan());
+        
+        println!("{}━{}", style("  ").dim(), style("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━").dim());
+        println!("  {}", style("Config file: ~/.config/huh/config.json").dim());
+        println!();
+        Ok(())
+    }
+
+    pub fn configure_interactive(&self) -> Result<Config, String> {
+        let mut config = self.load_config()?;
+        
+        println!("\n{}", style("⚙️  Interactive Configuration").bold().cyan());
+        println!("{}", style("Configure huh settings interactively").dim());
+        println!();
+
+        let options = vec![
+            "Model selection",
+            "Scrollback buffer size", 
+            "Animation settings",
+            "Display preferences",
+            "Response length",
+            "API settings",
+            "Save and exit",
+        ];
+
+        loop {
+            let selection = Select::with_theme(&ColorfulTheme::default())
+                .with_prompt("What would you like to configure?")
+                .items(&options)
+                .interact()
+                .map_err(|e| format!("Failed to get user selection: {}", e))?;
+
+            match selection {
+                0 => config = self.configure_model(config)?,
+                1 => config = self.configure_scrollback(config)?,
+                2 => config = self.configure_animations(config)?,
+                3 => config = self.configure_display(config)?,
+                4 => config = self.configure_response_length(config)?,
+                5 => config = self.configure_api(config)?,
+                6 => break,
+                _ => unreachable!(),
+            }
+        }
+
+        self.save_config(&config)?;
+        println!("{} Configuration saved!", style("✓").green().bold());
+        println!();
+        Ok(config)
+    }
+
+    fn configure_model(&self, mut config: Config) -> Result<Config, String> {
+        println!("\n{}", style("🤖 Model Configuration").bold().blue());
+        
+        let models = get_available_models();
+        let model_names: Vec<&str> = models.iter().map(|m| m.name).collect();
+        let current_index = models.iter()
+            .position(|m| m.id == config.default_model)
+            .unwrap_or(0);
+
+        let selection = Select::with_theme(&ColorfulTheme::default())
+            .with_prompt("Select default model")
+            .default(current_index)
+            .items(&model_names)
+            .interact()
+            .map_err(|e| format!("Failed to get selection: {}", e))?;
+
+        config.default_model = models[selection].id.to_string();
+        println!("{} Model set to: {}", style("✓").green(), style(&config.default_model).cyan());
+        Ok(config)
+    }
+
+    fn configure_scrollback(&self, mut config: Config) -> Result<Config, String> {
+        println!("\n{}", style("📚 Scrollback Configuration").bold().blue());
+        
+        let options = vec!["1 command", "2 commands", "3 commands", "5 commands", "10 commands"];
+        let values = vec![1, 2, 3, 5, 10];
+        let current_index = values.iter().position(|&x| x == config.scrollback_buffer_size).unwrap_or(1);
+
+        let selection = Select::with_theme(&ColorfulTheme::default())
+            .with_prompt("How many previous commands to include for context?")
+            .default(current_index)
+            .items(&options)
+            .interact()
+            .map_err(|e| format!("Failed to get selection: {}", e))?;
+
+        config.scrollback_buffer_size = values[selection];
+        println!("{} Scrollback buffer set to: {} commands", 
+            style("✓").green(), style(config.scrollback_buffer_size).cyan());
+        Ok(config)
+    }
+
+    fn configure_animations(&self, mut config: Config) -> Result<Config, String> {
+        println!("\n{}", style("🎬 Animation Configuration").bold().blue());
+        
+        // Loading animation toggle
+        let enable_animation = Select::with_theme(&ColorfulTheme::default())
+            .with_prompt("Enable loading animation?")
+            .default(if config.enable_loading_animation { 0 } else { 1 })
+            .items(&["Yes", "No"])
+            .interact()
+            .map_err(|e| format!("Failed to get selection: {}", e))?;
+        
+        config.enable_loading_animation = enable_animation == 0;
+
+        if config.enable_loading_animation {
+            // Typing speed
+            let speed_options = vec!["Very fast (1ms)", "Fast (3ms)", "Normal (5ms)", "Slow (10ms)", "Very slow (20ms)"];
+            let speed_values = vec![1, 3, 5, 10, 20];
+            let current_speed_index = speed_values.iter()
+                .position(|&x| x == config.typing_animation_speed_ms)
+                .unwrap_or(1);
+
+            let speed_selection = Select::with_theme(&ColorfulTheme::default())
+                .with_prompt("Select typing animation speed")
+                .default(current_speed_index)
+                .items(&speed_options)
+                .interact()
+                .map_err(|e| format!("Failed to get selection: {}", e))?;
+
+            config.typing_animation_speed_ms = speed_values[speed_selection];
+        }
+
+        println!("{} Animation settings updated", style("✓").green());
+        Ok(config)
+    }
+
+    fn configure_display(&self, mut config: Config) -> Result<Config, String> {
+        println!("\n{}", style("🎨 Display Configuration").bold().blue());
+        
+        // Max line width
+        let width_options = vec!["80 characters", "100 characters", "120 characters", "Unlimited"];
+        let width_values = vec![80, 100, 120, 0];
+        let current_width_index = width_values.iter()
+            .position(|&x| x == config.max_line_width)
+            .unwrap_or(1);
+
+        let width_selection = Select::with_theme(&ColorfulTheme::default())
+            .with_prompt("Select maximum line width")
+            .default(current_width_index)
+            .items(&width_options)
+            .interact()
+            .map_err(|e| format!("Failed to get selection: {}", e))?;
+
+        config.max_line_width = width_values[width_selection];
+
+        // Show model in prompt
+        let show_model = Select::with_theme(&ColorfulTheme::default())
+            .with_prompt("Show current model in responses?")
+            .default(if config.show_model_in_prompt { 0 } else { 1 })
+            .items(&["Yes", "No"])
+            .interact()
+            .map_err(|e| format!("Failed to get selection: {}", e))?;
+        
+        config.show_model_in_prompt = show_model == 0;
+
+        // Verbose output
+        let verbose = Select::with_theme(&ColorfulTheme::default())
+            .with_prompt("Enable verbose output?")
+            .default(if config.verbose_output { 0 } else { 1 })
+            .items(&["Yes", "No"])
+            .interact()
+            .map_err(|e| format!("Failed to get selection: {}", e))?;
+        
+        config.verbose_output = verbose == 0;
+
+        println!("{} Display settings updated", style("✓").green());
+        Ok(config)
+    }
+
+    fn configure_response_length(&self, mut config: Config) -> Result<Config, String> {
+        println!("\n{}", style("📝 Response Length Configuration").bold().blue());
+        println!("{}", style("Control how much text the AI responds with").dim());
+        println!();
+        
+        let options = vec![
+            "Brief - Short, concise answers (faster)",
+            "Balanced - Moderate detail level (recommended)", 
+            "Detailed - Comprehensive explanations (slower)",
+            "Verbose - Maximum detail and examples (slowest)"
+        ];
+        let values = vec!["brief", "balanced", "detailed", "verbose"];
+        
+        let current_index = values.iter()
+            .position(|&x| x == config.response_length)
+            .unwrap_or(1);
+
+        let selection = Select::with_theme(&ColorfulTheme::default())
+            .with_prompt("Select preferred response length")
+            .default(current_index)
+            .items(&options)
+            .interact()
+            .map_err(|e| format!("Failed to get selection: {}", e))?;
+
+        config.response_length = values[selection].to_string();
+        
+        println!("{} Response length set to: {}", 
+            style("✓").green(), 
+            style(&config.response_length).cyan()
+        );
+        
+        // Show what this means
+        match config.response_length.as_str() {
+            "brief" => println!("  {} Responses will be short and to the point", style("→").dim()),
+            "balanced" => println!("  {} Responses will have moderate detail", style("→").dim()),
+            "detailed" => println!("  {} Responses will include comprehensive explanations", style("→").dim()),
+            "verbose" => println!("  {} Responses will be very detailed with examples", style("→").dim()),
+            _ => {}
+        }
+        
+        Ok(config)
+    }
+        println!("\n{}", style("🌐 API Configuration").bold().blue());
+        
+        let timeout_options = vec!["10 seconds", "30 seconds", "60 seconds", "120 seconds"];
+        let timeout_values = vec![10, 30, 60, 120];
+        let current_timeout_index = timeout_values.iter()
+            .position(|&x| x == config.api_timeout_seconds)
+            .unwrap_or(1);
+
+        let timeout_selection = Select::with_theme(&ColorfulTheme::default())
+            .with_prompt("Select API timeout")
+            .default(current_timeout_index)
+            .items(&timeout_options)
+            .interact()
+            .map_err(|e| format!("Failed to get selection: {}", e))?;
+
+        config.api_timeout_seconds = timeout_values[timeout_selection];
+
+        println!("{} API settings updated", style("✓").green());
+        Ok(config)
+    }
+
+    pub fn show_current_model(&self) -> Result<(), String> {
+        let config = self.load_config()?;
+        println!("{} Current default model: {}", 
+            style("ℹ").blue().bold(),
+            style(&config.default_model).cyan().bold()
+        );
+        Ok(())
+    }
+
+    pub fn change_model(&self) -> Result<Config, String> {
+        println!("\n{}", style("🔧 Change Default Model").bold().cyan());
+        println!("{}", style("Select your new default Gemini model:").dim());
+        println!();
+
+        let current_config = self.load_config()?;
+        let models = get_available_models();
+        let model_names: Vec<&str> = models.iter().map(|m| m.name).collect();
+
+        // Find current model index for default selection
+        let current_index = models.iter()
+            .position(|m| m.id == current_config.default_model)
+            .unwrap_or(0);
+
+        let selection = Select::with_theme(&ColorfulTheme::default())
+            .with_prompt("Select your preferred Gemini model")
+            .default(current_index)
+            .items(&model_names)
+            .interact()
+            .map_err(|e| format!("Failed to get user selection: {}", e))?;
+
+        let selected_model = models[selection].id.to_string();
+        
+        println!();
+        if selected_model == current_config.default_model {
+            println!("{} No change - keeping: {}", 
+                style("ℹ").blue().bold(), 
+                style(&selected_model).cyan().bold()
+            );
+        } else {
+            println!("{} Changed from {} to {}", 
+                style("✓").green().bold(),
+                style(&current_config.default_model).dim(),
+                style(&selected_model).cyan().bold()
+            );
+        }
+        println!();
+
+        let mut config = current_config;
+        config.default_model = selected_model;
+
+        self.save_config(&config)?;
+        Ok(config)
+    }
+
+    pub fn set_model(&self, model: &str) -> Result<Config, String> {
+        // Validate that the model is in our list
+        let models = get_available_models();
+        let valid_model = models.iter().find(|m| m.id == model);
+        
+        if valid_model.is_none() {
+            return Err(format!("Invalid model '{}'. Use --model without a value to see available models.", model));
+        }
+
+        let mut config = self.load_config()?;
+        config.default_model = model.to_string();
+
+        self.save_config(&config)?;
+        
+        println!("{} Default model changed to: {}", 
+            style("✓").green().bold(),
+            style(model).cyan().bold()
+        );
+        
+        Ok(config)
+    }
+
+    pub fn run_first_time_setup(&self) -> Result<Config, String> {
+        println!("\n{}", style("🚀 Welcome to huh!").bold().cyan());
+        println!("{}", style("Let's set up your configuration.").dim());
+        println!();
+
+        let models = get_available_models();
+        let model_names: Vec<&str> = models.iter().map(|m| m.name).collect();
+
+        let selection = Select::with_theme(&ColorfulTheme::default())
+            .with_prompt("Select your preferred Gemini model")
+            .default(0)
+            .items(&model_names)
+            .interact()
+            .map_err(|e| format!("Failed to get user selection: {}", e))?;
+
+        let selected_model = models[selection].id.to_string();
+        
+        println!();
+        println!("{} Selected: {}", 
+            style("✓").green().bold(), 
+            style(&selected_model).cyan().bold()
+        );
+
+        let mut config = Config::default();
+        config.default_model = selected_model;
+
+        // Ask if they want to configure more settings
+        let configure_more = Select::with_theme(&ColorfulTheme::default())
+            .with_prompt("Would you like to configure additional settings?")
+            .default(1)
+            .items(&["Yes, show configuration menu", "No, use defaults"])
+            .interact()
+            .map_err(|e| format!("Failed to get user selection: {}", e))?;
+
+        if configure_more == 0 {
+            config = self.configure_interactive_with_config(config)?;
+        } else {
+            println!("{}", style("Using default settings for other options.").dim());
+            println!("{}", style("You can change these anytime with: huh --config").dim());
+        }
+
+        println!("{}", style("Configuration saved to ~/.config/huh/config.json").dim());
+        println!();
+
+        self.save_config(&config)?;
+        Ok(config)
+    }
+
+    fn configure_interactive_with_config(&self, mut config: Config) -> Result<Config, String> {
+        let options = vec![
+            "Scrollback buffer size", 
+            "Animation settings",
+            "Display preferences",
+            "Response length",
+            "API settings",
+            "Save and continue",
+        ];
+
+        loop {
+            let selection = Select::with_theme(&ColorfulTheme::default())
+                .with_prompt("What would you like to configure?")
+                .items(&options)
+                .interact()
+                .map_err(|e| format!("Failed to get user selection: {}", e))?;
+
+            match selection {
+                0 => config = self.configure_scrollback(config)?,
+                1 => config = self.configure_animations(config)?,
+                2 => config = self.configure_display(config)?,
+                3 => config = self.configure_response_length(config)?,
+                4 => config = self.configure_api(config)?,
+                5 => break,
+                _ => unreachable!(),
+            }
+        }
+
+        Ok(config)
+    }
+}
+
+pub struct GeminiModel {
+    pub id: &'static str,
+    pub name: &'static str,
+}
+
+pub fn get_available_models() -> Vec<GeminiModel> {
+    vec![
+        GeminiModel {
+            id: "gemini-2.0-flash",
+            name: "Gemini 2.0 Flash (Recommended) - Fast, balanced performance",
+        },
+        GeminiModel {
+            id: "gemini-1.5-pro",
+            name: "Gemini 1.5 Pro - Advanced reasoning and complex tasks",
+        },
+        GeminiModel {
+            id: "gemini-1.5-flash",
+            name: "Gemini 1.5 Flash - Fast responses, good for quick queries",
+        },
+        GeminiModel {
+            id: "gemini-1.5-flash-8b",
+            name: "Gemini 1.5 Flash 8B - Lightweight, very fast responses",
+        },
+        GeminiModel {
+            id: "gemini-2.0-flash-exp",
+            name: "Gemini 2.0 Flash Experimental - Latest features (may be unstable)",
+        },
+        GeminiModel {
+            id: "gemini-exp-1121",
+            name: "Gemini Experimental 1121 - Cutting-edge experimental model",
+        },
+        GeminiModel {
+            id: "gemini-exp-1206",
+            name: "Gemini Experimental 1206 - Latest experimental features",
+        },
+        GeminiModel {
+            id: "gemini-2.5-flash-lite-preview-06-17", 
+            name: "Gemini 2.5 Flash Lite Preview - Optimized for efficiency",
+        },
+    ]
+}
